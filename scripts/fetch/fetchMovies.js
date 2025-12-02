@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
-dotenv.config();
-
 import {fetchMovieDetails} from "./fetchMovieDetails.js";
-import {processCountry} from "./processCountry.js";
+import {processCountry} from "../process/processCountry.js";
+
+dotenv.config();
 
 const hansZimmer = 947;
 

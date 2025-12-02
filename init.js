@@ -1,8 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 
-import {fetchMovies} from "./fetchMovies.js";
-import {fetchSpotifyAuth} from "./fetchSpotifyAuth.js";
+import {fetchMovies} from "./scripts/fetch/fetchMovies.js";
+import {fetchSpotifyAuth} from "./scripts/fetch/fetchSpotifyAuth.js";
 
 const app = express();
 const PORT = 3000;
