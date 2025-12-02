@@ -1,0 +1,26 @@
+{
+  "name": "hanszimmer-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node init.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LodeSnaet/hanszimmer-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LodeSnaet/hanszimmer-api/issues"
+  },
+  "homepage": "https://github.com/LodeSnaet/hanszimmer-api#readme",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}
