@@ -18,15 +18,8 @@ export const fetchMovies = async () => {
     }
 
     const data = await response.json();
-
-
     for (const movie of data.crew) {
-        const movieDetails = await fetchMovieDetails(movie.id);
-
-        for (const movieDetail of movieDetails) {
-
-            const  tidalAlbum = await fetchTidalAlbum(movieDetail.title);
-
+        for (const movieDetail of await fetchMovieDetails(movie.id)) {
             movies.push(
                 {
                     id: movie.id,
@@ -34,13 +27,12 @@ export const fetchMovies = async () => {
                     overview: movieDetail.overview,
                     poster_path: `${process.env.FULL_POSTER_PATH}/original${movieDetail.poster_path}`,
                     origin_country: await processCountry(movieDetail.origin_country[0]),
-                    tidal_album: tidalAlbum
+                    tidal_album: await fetchTidalAlbum(movieDetail.title, movieDetail.origin_country[0])
                 }
             );
         }
     }
     console.log('✅ Fetched Data:', movies[0] );
-
 
     return movies || [] ;
 }
