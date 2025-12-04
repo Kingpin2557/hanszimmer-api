@@ -2,24 +2,26 @@ import express from 'express';
 import dotenv from 'dotenv';
 
 import {fetchMovies} from "./scripts/fetch/fetchMovies.js";
+import {authTidal} from "./scripts/auth/authTidal.js";
 
 const app = express();
 const PORT = 3000;
 dotenv.config();
 
 const initialize = async () => {
+    const authData = await authTidal();
 
     try {
+        process.env.TIDAL_ACCESS_TOKEN = authData.access_token;
+        console.log('Current Access Token Value (First 10 chars):', process.env.TIDAL_ACCESS_TOKEN ? process.env.TIDAL_ACCESS_TOKEN.substring(0, 10) + '...' : 'TOKEN IS UNDEFINED');
         app.listen(
             PORT,
             () => console.log(`🚀 Server running on http://localhost:${PORT}`)
         );
-
     } catch (err) {
-        console.error('Initialization failed:', err);
+        console.error('Spotify authentication failed:', err);
     }
 }
-
 
 app.use(express.json());
 

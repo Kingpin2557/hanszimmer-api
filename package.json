@@ -20,7 +20,6 @@
   },
   "homepage": "https://github.com/LodeSnaet/hanszimmer-api#readme",
   "dependencies": {
-    "@tidal-music/auth": "^1.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1"
   },
