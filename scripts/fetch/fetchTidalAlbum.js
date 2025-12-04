@@ -4,7 +4,8 @@ dotenv.config();
 export const fetchTidalAlbum = async (albumTitle) => {
     try {
         const response = await fetch(
-            `https://openapi.tidal.com/v2/users/me`,
+            `https://openapi.tidal.com/v2/artistRoles/1
+`,
             {
                 headers: {
                     Authorization: `Bearer ${process.env.TIDAL_ACCESS_TOKEN}`,

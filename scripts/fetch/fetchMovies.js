@@ -24,7 +24,6 @@ export const fetchMovies = async () => {
         const movieDetails = await fetchMovieDetails(movie.id);
 
         for (const movieDetail of movieDetails) {
-            console.log('Current Access Token Value (First 10 chars):', process.env.TIDAL_ACCESS_TOKEN ? process.env.TIDAL_ACCESS_TOKEN : 'TOKEN IS UNDEFINED');
 
             const  tidalAlbum = await fetchTidalAlbum(movieDetail.title);
 
