@@ -1,11 +1,12 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-export const fetchTidalAlbum = async (movieTitle, countryCode) => {
+export const fetchTidalAlbum = async (movieTitle) => {
 
+    console.log('Fetching TIDAL album for movie:', movieTitle);
     try {
         const response = await fetch(
-            `https://openapi.tidal.com/v2/artists/12979?countryCode=${countryCode}&include=albums`,
+            `https://openapi.tidal.com/v2/artists/12979?countryCode=us&include=albums`,
             {
                 headers: {
                     Authorization: `Bearer ${process.env.TIDAL_ACCESS_TOKEN}`,
@@ -18,24 +19,9 @@ export const fetchTidalAlbum = async (movieTitle, countryCode) => {
             console.error(`Fetching TIDAL album failed: ${response.status} - ${response.statusText}`);
             throw new Error(`TIDAL API request failed with status ${response.status}`);
         }
-
         const data = await response.json();
 
-        const matchingAlbum = data.included?.find(album => {
-            const albumTitle = album.attributes?.title;
-            return albumTitle?.toLowerCase() === movieTitle.toLowerCase();
-        }) || null;
-
-        const albumId = matchingAlbum?.id || null;
-
-        if (albumId) {
-            console.log(`✅ Match Found! Album ID: ${albumId}`);
-        } else {
-            console.log(`❌ No exact TIDAL match found for movie: "${movieTitle}"`);
-            console.log("API response:", JSON.stringify(data, null, 2));
-        }
-
-        return albumId;
+        return data.included[0].attributes.title;
 
     } catch (error) {
         console.error("Error in fetchTidalAlbum:", error.message);
