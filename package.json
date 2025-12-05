@@ -1,3 +1,4 @@
+
 {
   "name": "hanszimmer-api",
   "version": "1.0.0",
@@ -10,17 +11,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LodeSnaet/hanszimmer-api.git"
+    "url": "git+https://github.com/Kingpin2557/hanszimmer-api.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/LodeSnaet/hanszimmer-api/issues"
+    "url": "https://github.com/Kingpin2557/hanszimmer-api/issues"
   },
-  "homepage": "https://github.com/LodeSnaet/hanszimmer-api#readme",
+  "homepage": "https://github.com/Kingpin2557/hanszimmer-api#readme",
   "dependencies": {
-    "@tidal-music/auth": "^1.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1"
   },
