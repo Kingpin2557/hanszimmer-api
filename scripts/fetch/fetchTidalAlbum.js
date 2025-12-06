@@ -25,11 +25,9 @@ export const fetchTidalAlbums = async (movieTitle) => {
         await wait(timeToWait);
     }
 
-    const token = process.env.TIDAL_ACCESS_TOKEN
-
     const response = await fetch(`https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include&include=albums,topHits`, {
         headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${process.env.TIDAL_ACCESS_TOKEN}`,
             accept: "application/vnd.api+json"
         }
     });

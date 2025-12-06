@@ -12,6 +12,8 @@ app.use(express.json());
 
 app.get('/', async (req, res) => {
     try {
+        const authData = await authTidal();
+        process.env.TIDAL_ACCESS_TOKEN = authData.access_token;
         const movies = await fetchMovies();
         res.send(movies);
     } catch (error) {
@@ -24,8 +26,7 @@ app.get('/', async (req, res) => {
 
 (async () => {
     try {
-        const authData = await authTidal();
-        process.env.TIDAL_ACCESS_TOKEN = authData.access_token;
+
         console.log('Access token initialized');
     } catch (err) {
         console.error('TIDAL auth failed:', err);
