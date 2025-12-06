@@ -16,13 +16,13 @@ export const authTidal = async () => {
         })
 
         if (!response.ok) {
-            console.error(`❌ Spotify Auth Error: Status ${response.status}`);
-            throw new Error(`Spotify authentication failed.`);
+            console.error(`❌ Tidal Auth Error: Status ${response.status}`);
+            throw new Error(`Tidal authentication failed.`);
         }
 
         return await response.json();
     } catch (error) {
-        console.error('An error occurred during Spotify fetch:', error.message);
+        console.error('An error occurred during Tidal fetch:', error.message);
         throw error;
     }
 }
