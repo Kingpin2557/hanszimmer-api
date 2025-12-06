@@ -1,4 +1,3 @@
-
 {
   "name": "hanszimmer-api",
   "version": "1.0.0",
@@ -7,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node init.js"
+    "dev": "node init.js",
+    "build": "npx netlify deploy --prod",
+    "vercel-build": "echo hello"
   },
   "repository": {
     "type": "git",
@@ -22,7 +23,8 @@
   "homepage": "https://github.com/Kingpin2557/hanszimmer-api#readme",
   "dependencies": {
     "dotenv": "^17.2.3",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "prettier": "^3.7.3"

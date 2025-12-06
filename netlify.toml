@@ -1,0 +1,11 @@
+[build]
+    publish = "dist"
+    functions = "netlify/functions"
+[functions]
+    external_node_modules = ["express"]
+    timeout = 1000
+[[redirects]]
+    force = true
+    status = 200
+    from = "/"
+    to = "/.netlify/functions/index"

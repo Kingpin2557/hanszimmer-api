@@ -5,7 +5,7 @@ import {fetchMovies} from "./scripts/fetch/fetchMovies.js";
 import {authTidal} from "./scripts/auth/authTidal.js";
 
 const app = express();
-const PORT = 3000;
+// const PORT = 3000;
 dotenv.config();
 
 const initialize = async () => {
@@ -15,10 +15,10 @@ const initialize = async () => {
         process.env.TIDAL_ACCESS_TOKEN = authData.access_token;
         console.log('Current Access Token Value (First 10 chars):', process.env.TIDAL_ACCESS_TOKEN ? process.env.TIDAL_ACCESS_TOKEN : 'TOKEN IS UNDEFINED');
 
-        app.listen(
-            PORT,
-            () => console.log(`🚀 Server running on http://localhost:${PORT}`)
-        );
+        // app.listen(
+        //     PORT,
+        //     () => console.log(`🚀 Server running on http://localhost:${PORT}`)
+        // );
     } catch (err) {
         console.error('Spotify authentication failed:', err);
     }
@@ -42,4 +42,6 @@ app.get('/', async (req, res) => {
 });
 
 initialize();
+
+module.exports = {app};
 
