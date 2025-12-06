@@ -27,7 +27,7 @@ export const fetchMovies = async () => {
                     overview: movieDetail.overview,
                     poster_path: `${process.env.FULL_POSTER_PATH}/original${movieDetail.poster_path}`,
                     origin_country: await processCountry(movieDetail.origin_country[0]),
-                    tidal_album: await fetchTidalAlbums(movieDetail.title, movieDetail.origin_country[0])
+                    tidal_album: await fetchTidalAlbums(movie.title)
                 }
             );
         }
