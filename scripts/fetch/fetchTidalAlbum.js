@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import {limitlessFetch} from "../handleRateLimit.js";
+import {limitlessFetch} from "../limitlessFetch.js";
 dotenv.config();
 
 const isTitleClose = (albumTitle, movieTitle) => {

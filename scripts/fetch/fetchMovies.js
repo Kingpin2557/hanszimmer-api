@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import {fetchMovieDetails} from "./fetchMovieDetails.js";
 import {processCountry} from "../process/processCountry.js";
 import {fetchTidalAlbums} from "./fetchTidalAlbum.js";
-import {limitlessFetch} from "../handleRateLimit.js";
+import {limitlessFetch} from "../limitlessFetch.js";
 
 dotenv.config();
 

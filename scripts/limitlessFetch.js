@@ -1,10 +1,10 @@
-export async function limitlessFetch(url, token = '') {
+export async function limitlessFetch(url, token) {
     const maxTries = 3
     for(let attempt = 1, timeout = 750; attempt <= maxTries; attempt++, timeout *= 1.5) {
         const response = await fetch(url, {
             headers: {
                 Authorization: `Bearer ${token}`,
-                accept: "application/vnd.api+json"
+                accept: "application/json"
             }
         })
         if(response.ok) {

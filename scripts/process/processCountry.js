@@ -1,4 +1,4 @@
-import {limitlessFetch} from "../handleRateLimit.js";
+import {limitlessFetch} from "../limitlessFetch.js";
 
 export const processCountry = async (code) => {
     let country = {};
