@@ -2,12 +2,6 @@ export const processCountry = async (code) => {
     let country = {};
 
     const response = await fetch(`https://restcountries.com/v3.1/alpha/${code}`);
-
-    if (!response.ok) {
-        console.error(`Failed to process country data ${response.status} - ${response.statusText}`);
-        throw new Error(`API request failed with status ${response.status}`);
-    }
-
     const data = await response.json();
 
     if (data && data.length > 0) {

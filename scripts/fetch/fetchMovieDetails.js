@@ -1,15 +1,7 @@
 import dotenv from 'dotenv';
+import {limitlessFetch} from "../limitlessFetch.js";
 dotenv.config();
 
 export const fetchMovieDetails = async (id) => {
-    const response = await fetch(`${process.env.BASE_URL}/movie/${id}?api_key=${process.env.TMDB_API_KEY}`);
-
-    if (!response.ok) {
-        console.error(`Failed to fetch movie details ${response.status} - ${response.statusText}`);
-        throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    return [data] || [];
+    return await limitlessFetch(`${process.env.BASE_URL}/movie/${id}?api_key=${process.env.TMDB_API_KEY}`, `TMDB API Error for movie with id: ${id}`);
 }

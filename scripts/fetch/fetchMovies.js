@@ -2,37 +2,42 @@ import dotenv from 'dotenv';
 import {fetchMovieDetails} from "./fetchMovieDetails.js";
 import {processCountry} from "../process/processCountry.js";
 import {fetchTidalAlbums} from "./fetchTidalAlbum.js";
+import {limitlessFetch} from "../limitlessFetch.js";
 
 dotenv.config();
 
 const hansZimmer = 947;
 
 export const fetchMovies = async () => {
-    let movies = []
+    const movies = []
+    const data = await limitlessFetch(`${process.env.BASE_URL}/person/${hansZimmer}/movie_credits?api_key=${process.env.TMDB_API_KEY}`, 'TMDB API Error');
 
-    const response = await fetch(`${process.env.BASE_URL}/person/${hansZimmer}/movie_credits?api_key=${process.env.TMDB_API_KEY}`);
 
-    if (!response.ok) {
-        console.error(`Failed to fetch movies: ${response.status} - ${response.statusText}`);
-        throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
+    // await Promise.all(
+    //     data.crew.map(async (movie) => {
+    //         const detail = await fetchMovieDetails(movie.id)
+    //         movies.push({
+    //             id: movie.id,
+    //             title: detail.title,
+    //             overview: detail.overview,
+    //             poster_path: `${process.env.FULL_POSTER_PATH}/original${detail.poster_path}`,
+    //             origin_country: await processCountry(detail.origin_country[0]),
+    //             tidal_album: await fetchTidalAlbums(movie.title)
+    //         });
+    //     })
+    // )
     for (const movie of data.crew) {
-        for (const movieDetail of await fetchMovieDetails(movie.id)) {
-            movies.push(
-                {
-                    id: movie.id,
-                    title: movieDetail.title,
-                    overview: movieDetail.overview,
-                    poster_path: `${process.env.FULL_POSTER_PATH}/original${movieDetail.poster_path}`,
-                    origin_country: await processCountry(movieDetail.origin_country[0]),
-                    tidal_album: await fetchTidalAlbums(movie.title)
-                }
-            );
-        }
+        const detail = await fetchMovieDetails(movie.id)
+        movies.push({
+            id: movie.id,
+            title: detail.original_title,
+            overview: detail.overview,
+            poster_path: `${process.env.FULL_POSTER_PATH}/original${detail.poster_path}`,
+            origin_country: await processCountry(detail.origin_country[0]),
+            tidal_album: await fetchTidalAlbums(movie.original_title)
+        });
     }
-    console.log('✅ Fetched Data:', movies[0] );
 
+    console.log(`Fetched ${movies.length} movies.`);
     return movies || [] ;
 }
