@@ -14,6 +14,7 @@ export const fetchMovies = async () => {
 
     for (const movie of data.crew) {
         const detail = await fetchMovieDetails(movie.id)
+        console.log(`Fetched movie details for movie: ${detail.title}`);
         movies.push({
             id: movie.id,
             title: detail.title,
@@ -24,5 +25,6 @@ export const fetchMovies = async () => {
         });
     }
 
+    console.log(`Fetched ${movies.length} movies.`);
     return movies || [] ;
 }

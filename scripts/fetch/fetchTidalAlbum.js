@@ -9,11 +9,11 @@ const isTitleClose = (albumTitle, movieTitle) => {
 };
 
 export const fetchTidalAlbums = async (movieTitle, countryCode) => {
-    const {access_token} = await authTidal();
+    const auth = await authTidal();
 
     const data = await limitlessFetch(
         `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=${countryCode}&explicitFilter=include%2C%20exclude&include=albums`, 'Tidal API Error'
-        , access_token)
+        , auth.access_token)
 
 
     let foundAlbum = null;
