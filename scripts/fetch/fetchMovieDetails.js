@@ -9,7 +9,5 @@ export const fetchMovieDetails = async (id) => {
         throw new Error(`API request failed with status ${response.status}`);
     }
 
-    const data = await response.json();
-
-    return [data] || [];
+    return await response.json();
 }

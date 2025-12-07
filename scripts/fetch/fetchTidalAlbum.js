@@ -1,15 +1,5 @@
 import dotenv from 'dotenv';
-
 dotenv.config();
-
-const TIDAL_RATE_LIMIT_DELAY = 1000;
-
-function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-let lastRequestTime = 0;
-
 
 const isTitleClose = (albumTitle, movieTitle) => {
     const cleanedMovieTitle = movieTitle.toLowerCase().trim();
@@ -17,22 +7,12 @@ const isTitleClose = (albumTitle, movieTitle) => {
 };
 
 export const fetchTidalAlbums = async (movieTitle) => {
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime;
-
-    if (timeSinceLastRequest < TIDAL_RATE_LIMIT_DELAY) {
-        const timeToWait = TIDAL_RATE_LIMIT_DELAY - timeSinceLastRequest;
-        await wait(timeToWait);
-    }
-
     const response = await fetch(`https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include&include=albums,topHits`, {
         headers: {
             Authorization: `Bearer ${process.env.TIDAL_ACCESS_TOKEN}`,
             accept: "application/vnd.api+json"
         }
     });
-
-    lastRequestTime = Date.now();
 
     if (!response.ok) {
         throw new Error(`TIDAL API request failed: ${response.status}`);
