@@ -1,8 +1,8 @@
-import {limitlessFetch} from "../limitlessFetch.js";
-
 export const processCountry = async (code) => {
     let country = {};
-    const data = await limitlessFetch(`https://restcountries.com/v3.1/alpha/${code}`);
+
+    const response = await fetch(`https://restcountries.com/v3.1/alpha/${code}`);
+    const data = await response.json();
 
     if (data && data.length > 0) {
         country = {

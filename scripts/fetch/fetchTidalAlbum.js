@@ -2,18 +2,18 @@ import dotenv from 'dotenv';
 import {limitlessFetch} from "../limitlessFetch.js";
 import {authTidal} from "../auth/authTidal.js";
 dotenv.config();
+const auth = await authTidal();
 
 const isTitleClose = (albumTitle, movieTitle) => {
     const cleanedMovieTitle = movieTitle.toLowerCase().trim();
     return albumTitle.toLowerCase().includes(cleanedMovieTitle);
 };
 
-export const fetchTidalAlbums = async (movieTitle, countryCode) => {
-    const auth = await authTidal();
-
+export const fetchTidalAlbums = async (movieTitle) => {
+    const accessToken = auth.access_token;
     const data = await limitlessFetch(
-        `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=${countryCode}&explicitFilter=include%2C%20exclude&include=albums`, 'Tidal API Error'
-        , auth.access_token)
+        `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include%2C%20exclude&include=albums`, 'Tidal API Error'
+        , accessToken)
 
 
     let foundAlbum = null;

@@ -4,7 +4,7 @@ export async function limitlessFetch(url, errMsg = "Failed to fetch", token = ''
         const response = await fetch(url, {
             headers: {
                 Authorization: `Bearer ${token}`,
-                accept: "application/json"
+                accept: "application/vnd.api+json"
             }
         })
         if(response.ok) {
