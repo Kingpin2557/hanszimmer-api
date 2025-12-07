@@ -1,6 +1,6 @@
 export async function limitlessFetch(url, errMsg = "Failed to fetch", token = '') {
-    const maxTries = 3
-    for(let attempt = 1, timeout = 750; attempt <= maxTries; attempt++, timeout *= 1.5) {
+    const maxTries = 5
+    for(let attempt = 1, timeout = 750; attempt <= maxTries; attempt++, timeout *= 2) {
         const response = await fetch(url, {
             headers: {
                 Authorization: `Bearer ${token}`,

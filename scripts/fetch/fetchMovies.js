@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
-import {fetchMovieDetails} from "./fetchMovieDetails.js";
-import {processCountry} from "../process/processCountry.js";
-import {fetchTidalAlbums} from "./fetchTidalAlbum.js";
 import {limitlessFetch} from "../limitlessFetch.js";
+import {cacheMovies} from "../cache/cacheMovies.js";
+import {countryInfo} from "../cache/cacheCountry.js";
+import {cacheTidalAlbums} from "../cache/cacheTidalAlbums.js";
 
 dotenv.config();
 
@@ -15,26 +15,26 @@ export const fetchMovies = async () => {
 
     // await Promise.all(
     //     data.crew.map(async (movie) => {
-    //         const detail = await fetchMovieDetails(movie.id)
+    //         const detail = await cacheMovies(movie.id)
     //         movies.push({
     //             id: movie.id,
     //             title: detail.title,
     //             overview: detail.overview,
     //             poster_path: `${process.env.FULL_POSTER_PATH}/original${detail.poster_path}`,
-    //             origin_country: await processCountry(detail.origin_country[0]),
-    //             tidal_album: await fetchTidalAlbums(movie.title)
+    //             origin_country: await countryInfo(detail.origin_country[0]),
+    //             tidal_album: await cacheTidalAlbums(movie.title)
     //         });
     //     })
     // )
     for (const movie of data.crew) {
-        const detail = await fetchMovieDetails(movie.id)
+        const detail = await cacheMovies(movie.id)
         movies.push({
             id: movie.id,
             title: detail.original_title,
             overview: detail.overview,
             poster_path: `${process.env.FULL_POSTER_PATH}/original${detail.poster_path}`,
-            origin_country: await processCountry(detail.origin_country[0]),
-            tidal_album: await fetchTidalAlbums(movie.original_title)
+            origin_country: await countryInfo(detail.origin_country[0]),
+            tidal_album: await cacheTidalAlbums(movie.original_title)
         });
     }
 
