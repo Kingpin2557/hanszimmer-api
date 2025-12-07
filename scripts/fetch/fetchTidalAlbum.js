@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import {limitlessFetch} from "../handleRateLimit.js";
 dotenv.config();
 
 const isTitleClose = (albumTitle, movieTitle) => {
@@ -7,18 +8,10 @@ const isTitleClose = (albumTitle, movieTitle) => {
 };
 
 export const fetchTidalAlbums = async (movieTitle) => {
-    const response = await fetch(`https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include&include=albums,topHits`, {
-        headers: {
-            Authorization: `Bearer ${process.env.TIDAL_ACCESS_TOKEN}`,
-            accept: "application/vnd.api+json"
-        }
-    });
+    const data = await limitlessFetch(
+        `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include&include=albums,topHits`
+        , process.env.TIDAL_ACCESS_TOKEN)
 
-    if (!response.ok) {
-        throw new Error(`TIDAL API request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
 
     let foundAlbum = null;
 
