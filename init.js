@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 
 import {fetchMovies} from "./scripts/fetch/fetchMovies.js";
-import {authTidal} from "./scripts/auth/authTidal.js";
+
 const PORT = 3000;
 
 dotenv.config();
@@ -13,8 +13,6 @@ app.use(express.json());
 
 app.get('/', async (req, res) => {
     try {
-        const authData = await authTidal();
-        process.env.TIDAL_ACCESS_TOKEN = authData.access_token;
         const movies = await fetchMovies();
         res.send(movies);
     } catch (error) {

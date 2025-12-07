@@ -1,4 +1,4 @@
-export async function limitlessFetch(url, token) {
+export async function limitlessFetch(url, errMsg = "Failed to fetch", token = '') {
     const maxTries = 3
     for(let attempt = 1, timeout = 750; attempt <= maxTries; attempt++, timeout *= 1.5) {
         const response = await fetch(url, {
@@ -12,7 +12,7 @@ export async function limitlessFetch(url, token) {
         }
 
         if(response.status !== 429) {
-            throw new Error(`Failed to fetch: ${response.status}: "${response.statusText}"`)
+            throw new Error(`${errMsg}: ${response.status}: "${url}"`)
         }
         await new Promise((resolve) => setTimeout(resolve, timeout))
     }
