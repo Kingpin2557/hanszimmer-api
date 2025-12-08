@@ -3,9 +3,24 @@ import {limitlessFetch} from "../limitlessFetch.js";
 import {authTidal} from "../auth/authTidal.js";
 dotenv.config();
 
+const STOP_WORDS = new Set([
+    "a", "an", "the", "and", "but", "or", "of", "in", "on", "at", "for", "with", "from", "to", "is", "it"
+]);
+
+const cleanAndSplitTitle = (title) => {
+    return title.toLowerCase()
+        // Replace non-alphanumeric characters with a space (except spaces)
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/) // Split by one or more spaces
+        .filter(word => word.length > 0 && !STOP_WORDS.has(word));
+};
+
 const isTitleClose = (albumTitle, movieTitle) => {
-    const cleanedMovieTitle = movieTitle.toLowerCase().trim();
-    return albumTitle.toLowerCase().includes(cleanedMovieTitle);
+    const albumWords = cleanAndSplitTitle(albumTitle);
+    const movieWords = cleanAndSplitTitle(movieTitle);
+
+    // Check if ALL significant words from the movie title are included in the album title words
+    return movieWords.every(movieWord => albumWords.includes(movieWord));
 };
 
 export const fetchTidalAlbums = async (movieTitle) => {
@@ -13,7 +28,7 @@ export const fetchTidalAlbums = async (movieTitle) => {
 
     const accessToken = auth.access_token;
     const data = await limitlessFetch(
-        `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include%2C%20exclude&include=albums`, 'Tidal API Error'
+        `https://openapi.tidal.com/v2/searchResults/${encodeURIComponent(movieTitle)}?countryCode=NO&explicitFilter=include%2C%20exclude&include=albums,topHits`, 'Tidal API Error'
         , accessToken)
 
 
@@ -32,6 +47,7 @@ export const fetchTidalAlbums = async (movieTitle) => {
         console.log(`Successfully found close album match: ${foundAlbum.attributes.title}`);
         return {
             id: foundAlbum.id,
+            embed_link:`https://embed.tidal.com/albums/${foundAlbum.id}`,
             title: foundAlbum.attributes.title,
             tracks: `${process.env.BASE_URL}${foundAlbum.relationships.items.links.self}`
         };

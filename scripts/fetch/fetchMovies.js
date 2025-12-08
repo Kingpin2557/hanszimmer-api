@@ -11,21 +11,6 @@ const hansZimmer = 947;
 export const fetchMovies = async () => {
     const movies = []
     const data = await limitlessFetch(`${process.env.BASE_URL}/person/${hansZimmer}/movie_credits?api_key=${process.env.TMDB_API_KEY}`, 'TMDB API Error');
-
-
-    // await Promise.all(
-    //     data.crew.map(async (movie) => {
-    //         const detail = await cacheMovies(movie.id)
-    //         movies.push({
-    //             id: movie.id,
-    //             title: detail.title,
-    //             overview: detail.overview,
-    //             poster_path: `${process.env.FULL_POSTER_PATH}/original${detail.poster_path}`,
-    //             origin_country: await countryInfo(detail.origin_country[0]),
-    //             tidal_album: await cacheTidalAlbums(movie.title)
-    //         });
-    //     })
-    // )
     for (const movie of data.crew) {
         const detail = await cacheMovies(movie.id)
         movies.push({
