@@ -1,14 +1,15 @@
 {
   "name": "hanszimmer-api",
-  "version": "1.0.0",
-  "type": "module",
-  "description": "",
-  "main": "index.js",
+  "version": "2.0.0",
+  "description": "Hans Zimmer filmography (TMDB) + soundtrack previews (iTunes Search API, no auth)",
+  "main": "server/app.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node init.js",
-    "build": "npx netlify deploy --prod",
-    "vercel-build": "echo hello"
+    "dev": "nodemon --ext ts --exec ts-node ./server/app.ts",
+    "start": "ts-node ./server/app.ts",
+    "build:data": "ts-node ./scripts/build-data.ts"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "repository": {
     "type": "git",
@@ -22,11 +23,21 @@
   },
   "homepage": "https://github.com/Kingpin2557/hanszimmer-api#readme",
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "serverless-http": "^4.0.0"
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "prettier": "^3.7.3"
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.7.3",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
   }
 }
