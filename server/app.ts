@@ -10,9 +10,25 @@ import swaggerUi from "swagger-ui-express";
 const app: Application = express();
 const PORT: number = parseInt(<string>process.env.PORT, 10) || 3000;
 
+// 1. Get the string from env and convert it to an array
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+
+// 2. Configure CORS options
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Check if the request origin is in our allowed list
+    // !origin allows requests like curl or mobile apps that don't send an origin header
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  }
+};
+
 // Public read-only data API: allow all origins
 // (consumed by the hanszimmer frontend and the UE5 browser widget).
-app.use(cors());
+app.use(cors(corsOptions));
 
 const swaggerOptions = {
   definition: {
