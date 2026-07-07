@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
-import { movieQueries, generatedAt } from "../../services/movieService";
+import { movieQueries } from "../../services/movieService";
 
 export const getApiInfo = (_req: Request, res: Response): void => {
   res.json({
     name: "hanszimmer-api",
-    description: "Hans Zimmer filmography (TMDB) + soundtrack previews (iTunes Search API).",
-    generatedAt,
-    movieCount: movieQueries.getCount(),
+    description: "Hans Zimmer filmography (TMDB, live) + soundtrack previews (iTunes Search API).",
+    mode: "live",
+    cachedAt: movieQueries.getCachedAt(),
     endpoints: {
       docs: "/api-docs",
       movies: "/api/movie?page=1&limit=20",

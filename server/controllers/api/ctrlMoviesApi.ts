@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import { movieQueries, generatedAt } from "../../services/movieService";
+import { movieQueries } from "../../services/movieService";
 import { itunesQueries } from "../../services/itunesService";
 import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
-const cache = (res: Response, seconds: number = DAY): void => {
+const cache = (res: Response, seconds: number = 6 * 3600): void => {
   res.set(
     "Cache-Control",
     `public, max-age=300, s-maxage=${seconds}, stale-while-revalidate=${DAY}`,
@@ -19,12 +19,20 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
       const limit = Math.min(50, parseInt(req.query.limit as string) || 5);
       const offset = (page - 1) * limit;
-      const movies = movieQueries.getPaginated(limit, offset);
-      const total = movieQueries.getCount();
-      res.status(200).json({ movies, total, page, totalPages: Math.ceil(total / limit), generatedAt });
+      const [movies, total] = await Promise.all([
+        movieQueries.getPaginated(limit, offset),
+        movieQueries.getCount(),
+      ]);
+      res.status(200).json({
+        movies,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+        cachedAt: movieQueries.getCachedAt(),
+      });
     } else {
-      const movies = movieQueries.getAll();
-      res.status(200).json({ count: movies.length, generatedAt, movies });
+      const movies = await movieQueries.getAll();
+      res.status(200).json({ count: movies.length, cachedAt: movieQueries.getCachedAt(), movies });
     }
   } catch (error) {
     handleError(res, error);
@@ -33,7 +41,7 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
 
 export const getMovieById = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const movie = movieQueries.get(res.locals.numericId);
+    const movie = await movieQueries.getWithAlbum(res.locals.numericId);
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
       return;
@@ -48,7 +56,7 @@ export const getMovieById = async (_req: Request, res: Response): Promise<void> 
 
 export const getTracksForMovie = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const movie = movieQueries.get(res.locals.numericId);
+    const movie = await movieQueries.getWithAlbum(res.locals.numericId);
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
       return;
@@ -60,7 +68,7 @@ export const getTracksForMovie = async (_req: Request, res: Response): Promise<v
 
     const { album, tracks } = await itunesQueries.getAlbumTracks(movie.album.id);
 
-    cache(res);
+    cache(res, DAY);
     res.status(200).json({
       movieId: movie.id,
       movieTitle: movie.title,
