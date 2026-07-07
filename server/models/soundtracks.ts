@@ -1,4 +1,8 @@
+export type AlbumMatchType = "exact" | "fuzzy" | "fallback";
+
 export interface Album {
+  /** How this album was linked to the movie: exact/fuzzy title match, or a Hans Zimmer fallback album. */
+  matchType?: AlbumMatchType;
   id: number;
   title: string;
   artist: string;

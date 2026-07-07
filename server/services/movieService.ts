@@ -6,6 +6,7 @@
 import { tmdbQueries, type TmdbMovieDetail } from "./tmdbService";
 import { countryQueries } from "./countryService";
 import { itunesQueries } from "./itunesService";
+import { albumStore } from "./albumService";
 import { mapWithConcurrency } from "./http";
 import { type Movie } from "../models/movies";
 import { type Album } from "../models/soundtracks";
@@ -29,10 +30,35 @@ let inFlight: Promise<MoviesCache> | null = null;
 // Composer credits (movie id -> job), cached alongside the movie list TTL
 let creditsCache: { jobs: Map<number, string>; expiresAt: number } | null = null;
 
-// Lazy iTunes album matches (movie id -> album or null)
-const albumCache = new Map<number, Album | null>();
+const withAlbum = (movie: Movie): Movie => ({
+  ...movie,
+  album: albumStore.get(movie.id),
+});
 
-const toMovie = async (detail: TmdbMovieDetail, job: string | null): Promise<Movie> => ({
+/**
+ * Resolve ALL missing albums in one pass: fetch Hans Zimmer's full iTunes
+ * album catalog (2 requests) and match every movie against it locally.
+ * Unmatched movies are stored as null; albums.json is written once.
+ */
+const resolveAllAlbums = async (cache: MoviesCache): Promise<void> => {
+  // also re-match movies stored as null: fallback matching guarantees them music now
+  const missing = cache.movies.filter((movie) => !albumStore.has(movie.id) || !albumStore.get(movie.id));
+  if (missing.length === 0) return;
+
+  const catalog = await itunesQueries.getArtistCatalog("Hans Zimmer");
+  if (catalog.length === 0) {
+    console.warn("album catalog fetch returned nothing — skipping album matching");
+    return;
+  }
+
+  const entries = new Map(
+    missing.map((movie) => [movie.id, itunesQueries.matchFromCatalog(movie.title, movie.id, catalog)] as const),
+  );
+  albumStore.setAll(new Map(entries));
+  console.log(`Matched ${[...entries.values()].filter(Boolean).length}/${missing.length} new albums from a ${catalog.length}-album catalog.`);
+};
+
+const toMovie = (detail: TmdbMovieDetail, job: string | null): Movie => ({
   id: detail.id,
   title: detail.title,
   originalTitle: detail.original_title,
@@ -50,7 +76,7 @@ const toMovie = async (detail: TmdbMovieDetail, job: string | null): Promise<Mov
   imdbId: detail.imdb_id || null,
   poster: detail.poster_path ? `${TMDB_IMG}/w500${detail.poster_path}` : null,
   backdrop: detail.backdrop_path ? `${TMDB_IMG}/w1280${detail.backdrop_path}` : null,
-  originCountry: await countryQueries.get(detail.origin_country?.[0]),
+  originCountry: countryQueries.get(detail.origin_country?.[0]),
   zimmerJob: job,
   album: null,
 });
@@ -79,7 +105,7 @@ const buildCache = async (): Promise<MoviesCache> => {
       const detail = await tmdbQueries.getMovie(id);
       // Skip unreleased/obscure entries that a kiosk can't display properly
       if (!detail.poster_path || !detail.release_date) return null;
-      return await toMovie(detail, jobs.get(id) ?? null);
+      return toMovie(detail, jobs.get(id) ?? null);
     } catch (error) {
       console.warn(`skipping movie ${id}: ${(error as Error).message}`);
       return null;
@@ -116,12 +142,30 @@ const getCache = async (): Promise<MoviesCache> => {
 };
 
 export const movieQueries = {
-  getAll: async (): Promise<Movie[]> => (await getCache()).movies,
+  getAll: async (): Promise<Movie[]> => {
+    const cache = await getCache();
+    try {
+      await resolveAllAlbums(cache);
+    } catch (error) {
+      console.warn(`album matching failed: ${(error as Error).message}`);
+    }
+    return cache.movies.map(withAlbum);
+  },
 
   getCount: async (): Promise<number> => (await getCache()).movies.length,
 
-  getPaginated: async (limit: number, offset: number): Promise<Movie[]> =>
-    (await getCache()).movies.slice(offset, offset + limit),
+  getPaginated: async (limit: number, offset: number): Promise<Movie[]> => {
+    const cache = await getCache();
+    try {
+      await resolveAllAlbums(cache);
+    } catch (error) {
+      console.warn(`album matching failed: ${(error as Error).message}`);
+    }
+    return cache.movies.slice(offset, offset + limit).map(withAlbum);
+  },
+
+  /** How many movies have a matched (non-null) album so far. */
+  getAlbumsResolved: (): number => albumStore.countResolved(),
 
   get: async (id: number): Promise<Movie | null> => {
     // Fast path when the list cache is warm
@@ -138,21 +182,26 @@ export const movieQueries = {
     return toMovie(detail, job);
   },
 
-  /** Movie with its iTunes soundtrack album resolved (lazy, cached per movie). */
-  getWithAlbum: async (id: number): Promise<Movie | null> => {
+  /**
+   * Movie with its iTunes soundtrack album resolved (lazy, cached per movie).
+   * strict=true rethrows iTunes failures (tracks endpoint) instead of
+   * degrading to album:null (detail endpoint), so real errors stay visible.
+   */
+  getWithAlbum: async (id: number, strict = false): Promise<Movie | null> => {
     const movie = await movieQueries.get(id);
     if (!movie) return null;
 
-    if (!albumCache.has(id)) {
+    if (!albumStore.has(id)) {
       try {
-        albumCache.set(id, await itunesQueries.findAlbum(movie.title));
+        albumStore.set(id, await itunesQueries.findAlbum(movie.title));
       } catch (error) {
         console.warn(`iTunes album lookup failed for "${movie.title}": ${(error as Error).message}`);
+        if (strict) throw error;
         return { ...movie, album: null };
       }
     }
 
-    return { ...movie, album: albumCache.get(id) ?? null };
+    return { ...movie, album: albumStore.get(id) };
   },
 
   getCachedAt: (): string | null => moviesCache?.cachedAt ?? null,

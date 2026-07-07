@@ -6,7 +6,9 @@ All data is fetched **live**: TMDB for the filmography (ratings, runtime, genres
 restcountries.com for map coordinates, iTunes for soundtrack albums + previews. No build step.
 The movie list is cached in memory (6h TTL) and behind CDN `s-maxage` headers, so only the
 first cold request pays the TMDB fan-out (~3-5s); everything after is instant. iTunes albums
-are resolved lazily per movie to respect Apple's ~20 req/min rate limit.
+are matched in one pass at startup: the server fetches Hans Zimmer's full iTunes album
+catalog (2 requests) and matches every movie locally, writing the complete result to
+`server/data/albums.json`. Commit that file so deploys serve all albums with zero iTunes calls.
 
 ## Structure
 
@@ -27,6 +29,9 @@ server/
 ├── models/
 │   ├── movies.ts
 │   └── soundtracks.ts
+├── data/
+│   ├── countries.json     # Static country coords
+│   └── albums.json        # Complete iTunes album matches (written at startup)
 └── services/
     ├── movieService.ts    # movieQueries (orchestration + TTL cache)
     ├── tmdbService.ts     # tmdbQueries
@@ -41,7 +46,7 @@ server/
 | --- | --- |
 | `GET /` | API info |
 | `GET /api-docs` | Swagger UI |
-| `GET /api/movie` | All movies (rating, runtime, genres, country coords, album). Optional `?page=&limit=` |
+| `GET /api/movie` | All movies incl. album (rating, runtime, genres, country coords, `albumsResolved` counter). Optional `?page=&limit=` |
 | `GET /api/movie/:id` | Single movie, incl. matched iTunes `album` |
 | `GET /api/movie/:id/tracks` | Soundtrack tracks incl. 30s `previewUrl` (m4a) |
 | `GET /api/preview/:id` | CORS-friendly audio proxy — safe for Web Audio `AnalyserNode` |
@@ -50,7 +55,7 @@ server/
 
 ```bash
 npm install
-npm run dev   # http://localhost:3000
+npm run dev   # http://localhost:3000 — writes the complete server/data/albums.json at startup
 ```
 
 ## Deploy (Vercel)

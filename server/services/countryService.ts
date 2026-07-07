@@ -1,51 +1,24 @@
 /**
- * Country coordinates via restcountries.com (keyless).
- * Cached per country code, with in-flight deduplication.
+ * Country name + map coordinates from a bundled static dataset
+ * (ISO 3166-1 alpha-2 -> centroid lat/lng, source: Google canonical countries.csv, CC-BY 4.0).
+ * No external calls: country centroids are static data, and the previous
+ * runtime dependency (restcountries.com v3.1) got deprecated and broke.
  */
-import { fetchJson } from "./http";
+import countries from "../data/countries.json";
 import { type Country } from "../models/movies";
 
-const COUNTRIES_BASE: string =
-  process.env.COUNTRIES_BASE_URL || "https://restcountries.com";
+const dataset = countries as Record<string, { name: string; lat: number; lng: number }>;
 
-interface RestCountry {
-  name: { common: string; official: string };
-  cca2: string;
-  latlng: [number, number];
-}
-
-const cache = new Map<string, Promise<Country | null>>();
-
-const lookup = async (code: string): Promise<Country | null> => {
-  try {
-    const data = await fetchJson<RestCountry[]>(
-      `${COUNTRIES_BASE}/v3.1/alpha/${code}`,
-      { label: "restcountries" },
-    );
-    const entry = Array.isArray(data) ? data[0] : null;
+export const countryQueries = {
+  get: (code: string | undefined): Country | null => {
+    if (!code) return null;
+    const entry = dataset[code.toUpperCase()];
     if (!entry) return null;
 
     return {
-      name: entry.name.common,
-      officialName: entry.name.official,
-      code: entry.cca2,
-      coords: { lat: entry.latlng[0], lng: entry.latlng[1] },
+      name: entry.name,
+      code: code.toUpperCase(),
+      coords: { lat: entry.lat, lng: entry.lng },
     };
-  } catch (error) {
-    console.warn(`country lookup failed for "${code}": ${(error as Error).message}`);
-    return null;
-  }
-};
-
-export const countryQueries = {
-  get: (code: string | undefined): Promise<Country | null> => {
-    if (!code) return Promise.resolve(null);
-
-    let pending = cache.get(code);
-    if (!pending) {
-      pending = lookup(code);
-      cache.set(code, pending);
-    }
-    return pending;
   },
 };

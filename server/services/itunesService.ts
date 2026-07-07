@@ -5,14 +5,14 @@
  * Apple rate-limits to roughly 20 requests/minute per IP.
  * fetchJson retries 403/429 with backoff; the build script throttles on top of that.
  */
-import { fetchJson } from "./http";
-import { type Album, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
+import { fetchJson, sleep } from "./http";
+import { type Album, type AlbumMatchType, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
 
 const ITUNES_BASE: string = process.env.ITUNES_BASE_URL || "https://itunes.apple.com";
 const COUNTRY: string = process.env.ITUNES_COUNTRY || "US";
 
 /** Raw iTunes result item (only the fields we read). */
-interface ItunesResult {
+export interface ItunesResult {
   wrapperType: string;
   kind?: string;
   collectionId?: number;
@@ -40,7 +40,7 @@ const STOP_WORDS = new Set([
   "a", "an", "the", "and", "but", "or", "of", "in", "on", "at", "for", "with", "from", "to", "is", "it",
 ]);
 
-const BAD_ALBUM_WORDS = ["tribute", "karaoke", "inspired by", "lullaby", "ringtone", "cover version"];
+const BAD_ALBUM_WORDS = ["tribute", "karaoke", "inspired by", "lullaby", "ringtone", "cover version", "- single", " ep)"];
 
 const significantWords = (title: string): string[] =>
   title
@@ -57,14 +57,20 @@ const artwork = (url: string | undefined, size = 600): string | null =>
  * Score how well an iTunes album matches a movie title.
  * All significant movie-title words must appear in the album title.
  */
-const scoreAlbum = (album: ItunesResult, movieTitle: string): number => {
+const isJunk = (album: ItunesResult): boolean =>
+  BAD_ALBUM_WORDS.some((bad) => (album.collectionName || "").toLowerCase().includes(bad));
+
+const scoreAlbum = (album: ItunesResult, movieTitle: string, requireZimmer: boolean): number => {
   const albumTitle = (album.collectionName || "").toLowerCase();
   const albumWords = new Set(significantWords(albumTitle));
   const movieWords = significantWords(movieTitle);
 
   if (movieWords.length === 0) return 0;
   if (!movieWords.every((word) => albumWords.has(word))) return 0;
-  if (BAD_ALBUM_WORDS.some((bad) => albumTitle.includes(bad))) return 0;
+  if (isJunk(album)) return 0;
+  // Fallback searches are broad — only accept albums actually credited to Zimmer,
+  // otherwise random same-titled releases slip through.
+  if (requireZimmer && !/zimmer/i.test(album.artistName || "")) return 0;
 
   let score = 1;
   if (/soundtrack|original motion picture|original score|music from/i.test(albumTitle)) score += 0.5;
@@ -95,22 +101,102 @@ const searchAlbums = async (term: string): Promise<ItunesResult[]> => {
 // Track lookups (request time) — cached in memory per instance.
 const trackCache = new Map<string, AlbumTracks>();
 
+interface ItunesArtist {
+  wrapperType: string;
+  artistType?: string;
+  artistName?: string;
+  artistId?: number;
+}
+
 export const itunesQueries = {
   /**
    * Find the best-matching soundtrack album for a movie title.
    */
-  findAlbum: async (movieTitle: string): Promise<Album | null> => {
-    const candidates = await searchAlbums(`${movieTitle} Hans Zimmer`);
+  /**
+   * Hans Zimmer's full album catalog in two calls:
+   * artist search -> artist album lookup (up to 200 albums).
+   */
+  getArtistCatalog: async (artistName: string): Promise<ItunesResult[]> => {
+    const searchUrl = `${ITUNES_BASE}/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=5&country=${COUNTRY}`;
+    const artists = await fetchJson<{ results: ItunesArtist[] }>(searchUrl, { label: "iTunes artist search" });
+    const artist = (artists.results || []).find(
+      (result) => result.artistName?.toLowerCase() === artistName.toLowerCase(),
+    );
+    if (!artist?.artistId) return [];
 
+    const lookupUrl = `${ITUNES_BASE}/lookup?id=${artist.artistId}&entity=album&limit=200&country=${COUNTRY}`;
+    const data = await fetchJson<ItunesResponse>(lookupUrl, { label: "iTunes artist albums" });
+    return (data.results || []).filter((result) => result.wrapperType === "collection");
+  },
+
+  /**
+   * Match a movie against a prefetched catalog (no network), tiered:
+   * 1. exact  — every significant title word appears in the album title
+   * 2. fuzzy  — at least half the title words appear
+   * 3. fallback — any proper Zimmer album (picked by movie id, so it varies)
+   * Every movie gets music; matchType tells the frontend how official it is.
+   */
+  matchFromCatalog: (movieTitle: string, movieId: number, catalog: ItunesResult[]): Album | null => {
+    const withType = (result: ItunesResult, matchType: AlbumMatchType): Album => ({
+      ...normalizeAlbum(result),
+      matchType,
+    });
+
+    // 1. exact
     let best: ItunesResult | null = null;
     let bestScore = 0;
-
-    for (const candidate of candidates) {
-      const score = scoreAlbum(candidate, movieTitle);
+    for (const candidate of catalog) {
+      const score = scoreAlbum(candidate, movieTitle, false);
       if (score > bestScore) {
         best = candidate;
         bestScore = score;
       }
+    }
+    if (best) return withType(best, "exact");
+
+    // 2. fuzzy: at least half the significant title words in the album title
+    const movieWords = significantWords(movieTitle);
+    if (movieWords.length > 0) {
+      let fuzzyBest: ItunesResult | null = null;
+      let fuzzyScore = 0;
+      for (const candidate of catalog) {
+        if (isJunk(candidate)) continue;
+        const albumWords = new Set(significantWords((candidate.collectionName || "").toLowerCase()));
+        const coverage = movieWords.filter((word) => albumWords.has(word)).length / movieWords.length;
+        if (coverage >= 0.5 && coverage > fuzzyScore) {
+          fuzzyBest = candidate;
+          fuzzyScore = coverage;
+        }
+      }
+      if (fuzzyBest) return withType(fuzzyBest, "fuzzy");
+    }
+
+    // 3. fallback: deterministic pick from the clean catalog, varied per movie
+    const clean = catalog.filter((candidate) => !isJunk(candidate));
+    if (clean.length === 0) return null;
+    return withType(clean[movieId % clean.length] as ItunesResult, "fallback");
+  },
+
+  findAlbum: async (movieTitle: string): Promise<Album | null> => {
+    const pick = (candidates: ItunesResult[], requireZimmer: boolean): ItunesResult | null => {
+      let best: ItunesResult | null = null;
+      let bestScore = 0;
+      for (const candidate of candidates) {
+        const score = scoreAlbum(candidate, movieTitle, requireZimmer);
+        if (score > bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+      return best;
+    };
+
+    let best = pick(await searchAlbums(`${movieTitle} Hans Zimmer`), false);
+
+    // Fallback: broader search, but strictly Zimmer-credited results only
+    if (!best) {
+      await sleep(1000);
+      best = pick(await searchAlbums(`${movieTitle} soundtrack`), true);
     }
 
     return best ? normalizeAlbum(best) : null;

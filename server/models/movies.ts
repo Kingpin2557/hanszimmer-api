@@ -2,7 +2,6 @@ import { type Album } from "./soundtracks";
 
 export interface Country {
   name: string;
-  officialName?: string;
   code: string;
   coords: { lat: number; lng: number };
 }

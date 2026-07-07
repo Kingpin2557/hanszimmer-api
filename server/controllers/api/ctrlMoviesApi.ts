@@ -13,7 +13,7 @@ const cache = (res: Response, seconds: number = 6 * 3600): void => {
 
 export const getMovies = async (req: Request, res: Response): Promise<void> => {
   try {
-    cache(res);
+    cache(res, 900); // shorter CDN cache: albums fill in progressively
 
     if (req.query.page || req.query.limit) {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -28,11 +28,17 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
         total,
         page,
         totalPages: Math.ceil(total / limit),
+        albumsResolved: movieQueries.getAlbumsResolved(),
         cachedAt: movieQueries.getCachedAt(),
       });
     } else {
       const movies = await movieQueries.getAll();
-      res.status(200).json({ count: movies.length, cachedAt: movieQueries.getCachedAt(), movies });
+      res.status(200).json({
+        count: movies.length,
+        albumsResolved: movieQueries.getAlbumsResolved(),
+        cachedAt: movieQueries.getCachedAt(),
+        movies,
+      });
     }
   } catch (error) {
     handleError(res, error);
@@ -56,7 +62,7 @@ export const getMovieById = async (_req: Request, res: Response): Promise<void> 
 
 export const getTracksForMovie = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const movie = await movieQueries.getWithAlbum(res.locals.numericId);
+    const movie = await movieQueries.getWithAlbum(res.locals.numericId, true);
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
       return;

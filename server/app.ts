@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 
 import routes from "./routes";
+import { movieQueries } from "./services/movieService";
 import swaggerJsDocs from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 
@@ -53,5 +54,17 @@ app.listen(PORT, () => {
   console.log(`Server draait op http://localhost:${PORT}`);
   console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
 });
+
+// Local dev: warm the movie cache on boot, which also starts the background
+// album enrichment (persisted to server/data/albums.json as it progresses).
+// Skipped on Vercel, where cold starts should stay lazy.
+if (!process.env.VERCEL) {
+  void movieQueries
+    .getAll()
+    .then((movies) =>
+      console.log(`Warmed ${movies.length} movies; albums resolved so far: ${movieQueries.getAlbumsResolved()}`),
+    )
+    .catch((error: Error) => console.warn(`warmup failed: ${error.message}`));
+}
 
 export default app;
