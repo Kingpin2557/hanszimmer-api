@@ -69,11 +69,11 @@ export const streamPreview = async (
       .format("wav")
       .audioCodec("libmp3lame")
       .audioBitrate("128k")
-      .audioFrequency(44100) // Standard sample rate for better compatibility
-      .audioChannels(2) // Stereo
+      .audioFrequency(44100)
+      .audioChannels(2)
       .outputOptions([
-        "-write_xing", "0", // Disable Xing header for better compatibility
-        "-id3v2_version", "3", // Use ID3v2.3 for better compatibility
+        "-write_xing", "0",
+        "-id3v2_version", "3",
       ]);
 
     // Handle range requests with ffmpeg
