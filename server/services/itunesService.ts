@@ -136,7 +136,7 @@ export const itunesQueries = {
    * 3. fallback — any proper Zimmer album (picked by movie id, so it varies)
    * Every movie gets music; matchType tells the frontend how official it is.
    */
-  matchFromCatalog: (movieTitle: string, movieId: number, catalog: ItunesResult[]): Album | null => {
+  matchFromCatalog: (movieTitle: string, _movieId: number, catalog: ItunesResult[]): Album | null => {
     const withType = (result: ItunesResult, matchType: AlbumMatchType): Album => ({
       ...normalizeAlbum(result),
       matchType,
@@ -171,10 +171,9 @@ export const itunesQueries = {
       if (fuzzyBest) return withType(fuzzyBest, "fuzzy");
     }
 
-    // 3. fallback: deterministic pick from the clean catalog, varied per movie
-    const clean = catalog.filter((candidate) => !isJunk(candidate));
-    if (clean.length === 0) return null;
-    return withType(clean[movieId % clean.length] as ItunesResult, "fallback");
+    // No exact/fuzzy title match — return null rather than an unrelated album,
+    // so a shown soundtrack always corresponds to the movie.
+    return null;
   },
 
   findAlbum: async (movieTitle: string): Promise<Album | null> => {
