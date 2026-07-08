@@ -66,7 +66,7 @@ export const streamPreview = async (
 
     // Create ffmpeg command with better options for compatibility
     const command = ffmpeg(input)
-      .format("mp3")
+      .format("wav")
       .audioCodec("libmp3lame")
       .audioBitrate("128k")
       .audioFrequency(44100) // Standard sample rate for better compatibility
