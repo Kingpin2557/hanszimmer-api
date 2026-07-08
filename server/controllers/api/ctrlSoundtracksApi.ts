@@ -93,7 +93,8 @@ export const streamPreview = async (
           .format("wav")
           .audioCodec("pcm_s16le")
           .audioFrequency(44100)
-          .audioChannels(2);
+          .audioChannels(2)
+          .duration(5);
 
     // Handle range requests with ffmpeg
     if (rangeHeader) {
