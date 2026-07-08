@@ -23,4 +23,5 @@ router.use((req: Request, res: Response): void => {
   res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
 });
 
+
 export default router;

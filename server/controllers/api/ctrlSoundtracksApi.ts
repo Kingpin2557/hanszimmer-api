@@ -6,7 +6,6 @@ import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
 
-// Helper function to get allowed origin
 const getAllowedOrigin = (req: Request): string => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
   const origin = req.headers.origin;
@@ -54,70 +53,48 @@ export const streamPreview = async (
 
     const allowOrigin = getAllowedOrigin(req);
 
-    // UE5 WebBrowser widget compatible headers
-    // Chromium-based browser widget supports standard audio/wav
+    // Use MP3 for better compatibility and faster streaming
     const headers: Record<string, string> = {
-      "Content-Type": "audio/wav",
-      "Cache-Control": `public, max-age=${DAY}, immutable`,
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type, Accept",
+      "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
       "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
       "Accept-Ranges": "bytes",
-      // Ensure the browser knows this is a downloadable/playable file
-      "Content-Disposition": "inline; filename=\"preview.wav\"",
-      // Prevent any compression that might interfere with audio playback
-      "Content-Encoding": "identity",
     };
 
-    // Handle range requests for better streaming
+    // Handle range requests
     const rangeHeader = req.headers.range;
-    let contentLength = 0;
-
     if (rangeHeader) {
-      const upstreamContentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
+      const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
       const parts = rangeHeader.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : upstreamContentLength - 1;
+      const end = parts[1] ? parseInt(parts[1], 10) : contentLength - 1;
       const chunkSize = (end - start) + 1;
 
-      headers["Content-Range"] = `bytes ${start}-${end}/${upstreamContentLength}`;
+      headers["Content-Range"] = `bytes ${start}-${end}/${contentLength}`;
       headers["Content-Length"] = String(chunkSize);
-      contentLength = chunkSize;
-
-      res.status(206); // Partial Content
+      res.status(206);
     } else {
-      // No range request, send full content
-      const upstreamContentLength = upstream.headers.get('content-length');
-      if (upstreamContentLength) {
-        headers["Content-Length"] = upstreamContentLength;
-        contentLength = parseInt(upstreamContentLength, 10);
+      const contentLength = upstream.headers.get('content-length');
+      if (contentLength) {
+        headers["Content-Length"] = contentLength;
       }
     }
 
-    // Set headers before streaming
     res.set(headers);
 
     // Convert upstream response to readable stream
     const input = Readable.fromWeb(upstream.body as any);
 
-    console.log(`[streamPreview] Starting FFmpeg conversion to WAV (${contentLength} bytes)`);
-
-    // Create ffmpeg command optimized for UE5 WebBrowser widget
-    // UE5 expects standard PCM WAV format
+    // Convert to MP3 (faster than WAV)
     const command = ffmpeg(input)
-      .format("wav")
-      .audioCodec("pcm_s16le")  // UE5 native format
-      .audioFrequency(44100)     // Standard sample rate
-      .audioChannels(2)          // Stereo
-      .audioBitrate(1411.2)      // CD quality bitrate for WAV
-      .outputOptions([
-        "-acodec", "pcm_s16le",  // Explicit codec
-        "-ar", "44100",          // Sample rate
-        "-ac", "2",              // Channels
-        "-f", "wav",             // Force WAV format
-        "-bitexact",             // Ensure exact bit-for-bit output
-      ]);
+      .format("mp3")
+      .audioCodec("libmp3lame")
+      .audioBitrate("128k")
+      .audioFrequency(44100)
+      .audioChannels(2);
 
     // Handle range requests with ffmpeg
     if (rangeHeader) {
@@ -125,9 +102,8 @@ export const streamPreview = async (
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : undefined;
 
-      // Approximate seek in seconds (for WAV, we can be more precise)
-      // WAV at 44.1kHz stereo 16-bit = 176.4 KB/s
-      const bytesPerSecond = 44100 * 2 * 2; // 44.1kHz * 2 channels * 2 bytes
+      // Approximate seek in seconds
+      const bytesPerSecond = 44100 * 2 * 2;
       const seekSeconds = start / bytesPerSecond;
 
       command.seekInput(seekSeconds);
@@ -138,33 +114,33 @@ export const streamPreview = async (
       }
     }
 
-    // Pipe ffmpeg output to response
+    // Pipe ffmpeg output to response with explicit chunking
     const stream = command.pipe(res, { end: true });
 
-    // Handle stream errors
+    // Set up streaming with proper chunking
+    let isStreamEnded = false;
+
+    stream.on("data", (chunk) => {
+      // Send chunks as they come
+    });
+
     stream.on("error", (err) => {
       console.error("[streamPreview] Stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: "Stream processing failed",
-          details: err.message
-        });
+      if (!res.headersSent && !isStreamEnded) {
+        res.status(500).end();
       }
     });
 
     stream.on("end", () => {
       console.log("[streamPreview] Stream ended successfully");
+      isStreamEnded = true;
     });
 
-    // Handle client disconnect
     req.on("close", () => {
       console.log("[streamPreview] Client disconnected");
-      stream.destroy();
-    });
-
-    // Handle stream finish
-    stream.on("finish", () => {
-      console.log("[streamPreview] Stream finished");
+      if (!isStreamEnded) {
+        stream.destroy();
+      }
     });
 
   } catch (error) {
@@ -173,7 +149,6 @@ export const streamPreview = async (
   }
 };
 
-// OPTIONS handler for CORS preflight
 export const optionsPreview = (
   req: Request,
   res: Response,
@@ -183,7 +158,7 @@ export const optionsPreview = (
   res.set({
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-    "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type, Accept",
+    "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
     "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
     "Access-Control-Max-Age": "86400",
   });
