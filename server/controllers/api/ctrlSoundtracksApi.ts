@@ -27,11 +27,16 @@ export const streamPreview = async (
       return;
     }
 
+    // Get allowed origins from environment
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+    const origin = req.headers.origin;
+    const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+
     // Enhanced headers for better compatibility with UE5 web browser
     const headers: Record<string, string> = {
-      "Content-Type": "audio/mpeg",
+      "Content-Type": "audio/wav", // Changed to WAV
       "Cache-Control": `public, max-age=${DAY}`,
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
       "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
@@ -64,16 +69,15 @@ export const streamPreview = async (
     // Convert upstream response to readable stream
     const input = Readable.fromWeb(upstream.body as any);
 
-    // Create ffmpeg command with better options for compatibility
+    // Create ffmpeg command for WAV conversion
     const command = ffmpeg(input)
       .format("wav")
-      .audioCodec("libmp3lame")
-      .audioBitrate("128k")
-      .audioFrequency(44100)
-      .audioChannels(2)
+      .audioCodec("pcm_s16le") // WAV uses PCM encoding
+      .audioFrequency(44100) // Standard sample rate for better compatibility
+      .audioChannels(2) // Stereo
       .outputOptions([
-        "-write_xing", "0",
-        "-id3v2_version", "3",
+        "-write_xing", "0", // Disable Xing header for better compatibility
+        "-id3v2_version", "3", // Use ID3v2.3 for better compatibility
       ]);
 
     // Handle range requests with ffmpeg
@@ -124,8 +128,13 @@ export const optionsPreview = (
   req: Request,
   res: Response,
 ): void => {
+  // Get allowed origins from environment
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+  const origin = req.headers.origin;
+  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+
   res.set({
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
     "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
