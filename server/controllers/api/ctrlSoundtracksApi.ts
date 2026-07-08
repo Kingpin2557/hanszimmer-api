@@ -51,11 +51,93 @@ export const streamPreview = async (
       return;
     }
 
-    const contentType = upstream.headers.get('content-type') || '';
-    console.log(`[streamPreview] Upstream content-type: ${contentType}`);
+    console.log(`[streamPreview] Fetching upstream data...`);
+
+    // Read the entire upstream into a buffer first
+    const reader = upstream.body.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const upstreamBuffer = Buffer.concat(chunks);
+    console.log(`[streamPreview] Upstream size: ${upstreamBuffer.length} bytes`);
 
     const allowOrigin = getAllowedOrigin(req);
 
+    // Convert to WAV using a buffer approach
+    console.log(`[streamPreview] Starting FFmpeg conversion...`);
+
+    let wavBuffer: Buffer | null = null;
+    let ffmpegError: Error | null = null;
+
+    await new Promise<void>((resolve, reject) => {
+      const command = ffmpeg()
+        .input(upstreamBuffer)
+        .inputFormat('mp4')
+        .audioCodec('pcm_s16le')
+        .audioFrequency(44100)
+        .audioChannels(2)
+        .format('wav')
+        .duration(5) // Keep 5 second test
+        .outputOptions([
+          '-acodec', 'pcm_s16le',
+          '-ar', '44100',
+          '-ac', '2',
+          '-f', 'wav'
+        ]);
+
+      const buffers: Buffer[] = [];
+
+      command
+        .on('start', (cmd) => {
+          console.log(`[streamPreview] FFmpeg started: ${cmd}`);
+        })
+        .on('error', (err) => {
+          console.error('[streamPreview] FFmpeg error:', err);
+          ffmpegError = err;
+          reject(err);
+        })
+        .on('end', () => {
+          console.log('[streamPreview] FFmpeg completed');
+          wavBuffer = Buffer.concat(buffers);
+          console.log(`[streamPreview] WAV size: ${wavBuffer.length} bytes`);
+          resolve();
+        });
+
+      // Collect output
+      const stream = command.pipe();
+      stream.on('data', (chunk: Buffer) => {
+        buffers.push(chunk);
+      });
+      stream.on('error', (err) => {
+        console.error('[streamPreview] Stream error:', err);
+        reject(err);
+      });
+    });
+
+    if (ffmpegError) {
+      throw ffmpegError;
+    }
+
+    if (!wavBuffer || wavBuffer.length === 0) {
+      throw new Error('FFmpeg produced empty output');
+    }
+
+    // Check WAV signature
+    if (wavBuffer.length < 44) {
+      throw new Error(`WAV file too small: ${wavBuffer.length} bytes`);
+    }
+
+    const signature = wavBuffer.slice(0, 4).toString('ascii');
+    if (signature !== 'RIFF') {
+      throw new Error(`Invalid WAV signature: ${signature}`);
+    }
+
+    console.log(`[streamPreview] WAV validation passed, sending response...`);
+
+    // Set headers
     const headers: Record<string, string> = {
       "Content-Type": "audio/wav",
       "Cache-Control": `public, max-age=${DAY}`,
@@ -64,75 +146,11 @@ export const streamPreview = async (
       "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
       "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
       "Accept-Ranges": "bytes",
+      "Content-Length": String(wavBuffer.length),
     };
 
-    // Handle range requests
-    const rangeHeader = req.headers.range;
-    if (rangeHeader) {
-      const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
-      const parts = rangeHeader.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : contentLength - 1;
-      const chunkSize = (end - start) + 1;
-
-      headers["Content-Range"] = `bytes ${start}-${end}/${contentLength}`;
-      headers["Content-Length"] = String(chunkSize);
-      res.status(206);
-    } else {
-      const contentLength = upstream.headers.get('content-length');
-      if (contentLength) {
-        headers["Content-Length"] = contentLength;
-      }
-    }
-
     res.set(headers);
-
-    const input = Readable.fromWeb(upstream.body as any);
-
-    // FIX: Simplified input format detection - iTunes previews are always AAC in MP4
-    // Just use 'mp4' as the input format
-    console.log(`[streamPreview] Using input format: mp4`);
-
-    // FIX: Build FFmpeg command with simpler options
-    const command = ffmpeg(input)
-      .inputFormat('mp4') // Force mp4 input format
-      .audioCodec('pcm_s16le')
-      .audioFrequency(44100)
-      .audioChannels(2)
-      .format('wav')
-      .duration(5) // Keep 5 second test
-      .outputOptions([
-        '-acodec', 'pcm_s16le',
-        '-ar', '44100',
-        '-ac', '2',
-        '-f', 'wav'
-      ])
-      .on('start', (cmd) => {
-        console.log(`[streamPreview] FFmpeg started: ${cmd}`);
-      })
-      .on('error', (err) => {
-        console.error('[streamPreview] FFmpeg error:', err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Audio conversion failed", details: err.message });
-        }
-      })
-      .on('end', () => {
-        console.log('[streamPreview] FFmpeg conversion completed');
-      });
-
-    const stream = command.pipe(res, { end: true });
-
-    stream.on("error", (err) => {
-      console.error("[streamPreview] Stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Stream processing failed", details: err.message });
-      }
-    });
-
-    req.on("close", () => {
-      console.log("[streamPreview] Client disconnected");
-      stream.destroy();
-    });
+    res.send(wavBuffer);
 
   } catch (error) {
     console.error("[streamPreview] Fatal error:", error);
