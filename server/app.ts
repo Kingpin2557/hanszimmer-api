@@ -46,8 +46,15 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Handle preflight requests globally
-app.options("*", cors(corsOptions));
+// Handle preflight requests - use a different approach instead of app.options("*")
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'OPTIONS') {
+    // Use the same CORS options
+    cors(corsOptions)(req, res, next);
+  } else {
+    next();
+  }
+});
 
 // Swagger setup
 const swaggerOptions = {
