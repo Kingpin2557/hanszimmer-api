@@ -28,6 +28,7 @@ export const streamPreview = async (_req: Request, res: Response): Promise<void>
       "Content-Type": "audio/mp4",
       "Cache-Control": `public, max-age=${DAY}`,
       "Accept-Ranges": "bytes",
+      "Access-Control-Allow-Origin": "*",
     });
     const length = upstream.headers.get("content-length");
     if (length) res.set("Content-Length", length);
