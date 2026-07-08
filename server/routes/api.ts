@@ -7,6 +7,28 @@ const router = express.Router();
 
 /**
  * @openapi
+ * /api/health:
+ *   get:
+ *     tags:
+ *       - Health
+ *     summary: Health check endpoint for debugging
+ *     responses:
+ *       200:
+ *         description: API health status
+ */
+router.get("/health", (req: express.Request, res: express.Response) => {
+  res.json({
+    status: "ok",
+    environment: process.env.NODE_ENV || "development",
+    hasApiKey: !!process.env.TMDB_API_KEY,
+    apiKeyPrefix: process.env.TMDB_API_KEY ? process.env.TMDB_API_KEY.substring(0, 5) + "..." : "not set",
+    allowedOrigins: process.env.ALLOWED_ORIGINS?.split(",") || [],
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * @openapi
  * /api/movie:
  *   get:
  *     tags:

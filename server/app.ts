@@ -1,4 +1,4 @@
-import express, { Application } from "express";
+import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import path from "path";
 
@@ -70,21 +70,41 @@ const swaggerOptions = {
   apis: [path.join(__dirname, "routes.*"), path.join(__dirname, "routes/*.*")],
 };
 
-const specs = swaggerJsDocs(swaggerOptions);
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(specs, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-  }),
-);
+try {
+  const specs = swaggerJsDocs(swaggerOptions);
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(specs, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    }),
+  );
+} catch (error) {
+  console.error("Swagger initialization error:", error);
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/", routes);
+
+// Global error handler - must be after all routes
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error("Unhandled error:", err.message);
+  console.error(err.stack);
+  res.status(500).json({
+    error: "Internal server error",
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

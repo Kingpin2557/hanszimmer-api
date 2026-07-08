@@ -13,16 +13,36 @@ const cache = (res: Response, seconds: number = 6 * 3600): void => {
 
 export const getMovies = async (req: Request, res: Response): Promise<void> => {
   try {
-    cache(res, 900); // shorter CDN cache: albums fill in progressively
+    console.log("[getMovies] Starting request"); // Debug log
+
+    // Check if TMDB_API_KEY is set
+    if (!process.env.TMDB_API_KEY) {
+      console.error("[getMovies] TMDB_API_KEY is not set!");
+      res.status(500).json({
+        error: "Configuration error",
+        message: "TMDB_API_KEY is not configured"
+      });
+      return;
+    }
+
+    console.log("[getMovies] TMDB_API_KEY is set"); // Debug log
+
+    cache(res, 900);
 
     if (req.query.page || req.query.limit) {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
       const limit = Math.min(50, parseInt(req.query.limit as string) || 5);
       const offset = (page - 1) * limit;
+
+      console.log(`[getMovies] Fetching page ${page}, limit ${limit}`); // Debug log
+
       const [movies, total] = await Promise.all([
         movieQueries.getPaginated(limit, offset),
         movieQueries.getCount(),
       ]);
+
+      console.log(`[getMovies] Found ${movies.length} movies, total ${total}`); // Debug log
+
       res.status(200).json({
         movies,
         total,
@@ -32,7 +52,11 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
         cachedAt: movieQueries.getCachedAt(),
       });
     } else {
+      console.log("[getMovies] Fetching all movies"); // Debug log
       const movies = await movieQueries.getAll();
+
+      console.log(`[getMovies] Found ${movies.length} movies`); // Debug log
+
       res.status(200).json({
         count: movies.length,
         albumsResolved: movieQueries.getAlbumsResolved(),
@@ -41,12 +65,15 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
       });
     }
   } catch (error) {
+    console.error("[getMovies] Error:", error);
     handleError(res, error);
   }
 };
 
 export const getMovieById = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log(`[getMovieById] Fetching movie: ${req.params.id}`); // Debug log
+
     const movie = await movieQueries.getWithAlbumByKey(String(req.params.id));
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
@@ -56,12 +83,15 @@ export const getMovieById = async (req: Request, res: Response): Promise<void> =
     cache(res);
     res.status(200).json(movie);
   } catch (error) {
+    console.error("[getMovieById] Error:", error);
     handleError(res, error);
   }
 };
 
 export const getTracksForMovie = async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log(`[getTracksForMovie] Fetching tracks for movie: ${req.params.id}`); // Debug log
+
     const movie = await movieQueries.getWithAlbumByKey(String(req.params.id), true);
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
@@ -83,6 +113,7 @@ export const getTracksForMovie = async (req: Request, res: Response): Promise<vo
       tracks,
     });
   } catch (error) {
+    console.error("[getTracksForMovie] Error:", error);
     handleError(res, error);
   }
 };
