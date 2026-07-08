@@ -87,11 +87,9 @@ export const streamPreview = async (
 
     res.set(headers);
 
-    // Get the upstream body as a stream
     const input = Readable.fromWeb(upstream.body as any);
 
-    // FIX: Explicitly set input format based on content-type
-    // iTunes previews are typically AAC in MP4 container
+    // Determine input format
     let inputFormat = 'mp4';
     if (contentType.includes('mpeg') || contentType.includes('mp3')) {
       inputFormat = 'mp3';
@@ -103,14 +101,18 @@ export const streamPreview = async (
 
     console.log(`[streamPreview] Using input format: ${inputFormat}`);
 
-    // Build the FFmpeg command with explicit input format
+    // Build FFmpeg command - REMOVED -preset ultrafast
     const command = ffmpeg(input)
-      .inputFormat(inputFormat)
+      .inputOptions([
+        '-analyzeduration', '100M',
+        '-probesize', '100M',
+        '-f', inputFormat
+      ])
       .format("wav")
       .audioCodec("pcm_s16le")
       .audioFrequency(44100)
       .audioChannels(2)
-      .duration(5) // Keep your 5 second test
+      .duration(5)
       .outputOptions([
         '-acodec', 'pcm_s16le',
         '-ar', '44100',
@@ -118,27 +120,29 @@ export const streamPreview = async (
         '-f', 'wav',
         '-flags', '+bitexact',
         '-fflags', '+genpts',
-        '-avoid_negative_ts', 'make_zero'
-      ]);
+        '-avoid_negative_ts', 'make_zero',
+        '-map', '0:a'
+      ])
+      .on('start', (cmd) => {
+        console.log(`[streamPreview] FFmpeg started: ${cmd}`);
+      })
+      .on('error', (err) => {
+        console.error('[streamPreview] FFmpeg error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Audio conversion failed", details: err.message });
+        }
+      })
+      .on('end', () => {
+        console.log('[streamPreview] FFmpeg conversion completed');
+      });
 
-    // Log FFmpeg command for debugging
-    console.log(`[streamPreview] FFmpeg command created with duration: 5s`);
-
-    // Pipe ffmpeg output to response
     const stream = command.pipe(res, { end: true });
 
     stream.on("error", (err) => {
       console.error("[streamPreview] Stream error:", err);
       if (!res.headersSent) {
-        res.status(500).json({
-          error: "Stream processing failed",
-          details: err.message
-        });
+        res.status(500).json({ error: "Stream processing failed", details: err.message });
       }
-    });
-
-    stream.on("end", () => {
-      console.log("[streamPreview] Stream ended successfully");
     });
 
     req.on("close", () => {
