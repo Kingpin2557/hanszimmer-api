@@ -39,7 +39,7 @@ export const streamPreview = async (
       return;
     }
 
-    console.log(`[streamPreview] Fetching from iTunes: ${track.previewUrl}`);
+    console.log(`[streamPreview] Preview URL: ${track.previewUrl}`);
 
     const upstream = await fetch(track.previewUrl);
 
@@ -51,11 +51,13 @@ export const streamPreview = async (
       return;
     }
 
+    const contentType = upstream.headers.get('content-type') || '';
+    console.log(`[streamPreview] Upstream content-type: ${contentType}`);
+
     const allowOrigin = getAllowedOrigin(req);
 
-    // Use MP3 for better compatibility and faster streaming
     const headers: Record<string, string> = {
-      "Content-Type": "audio/mpeg",
+      "Content-Type": "audio/wav",
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -85,62 +87,63 @@ export const streamPreview = async (
 
     res.set(headers);
 
-    // Convert upstream response to readable stream
+    // Get the upstream body as a stream
     const input = Readable.fromWeb(upstream.body as any);
 
-    // Convert to MP3 (faster than WAV)
-    const command = ffmpeg(input)
-          .format("wav")
-          .audioCodec("pcm_s16le")
-          .audioFrequency(44100)
-          .audioChannels(2)
-          .duration(5);
-
-    // Handle range requests with ffmpeg
-    if (rangeHeader) {
-      const parts = rangeHeader.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : undefined;
-
-      // Approximate seek in seconds
-      const bytesPerSecond = 44100 * 2 * 2;
-      const seekSeconds = start / bytesPerSecond;
-
-      command.seekInput(seekSeconds);
-
-      if (end) {
-        const duration = (end - start) / bytesPerSecond;
-        command.duration(duration);
-      }
+    // FIX: Explicitly set input format based on content-type
+    // iTunes previews are typically AAC in MP4 container
+    let inputFormat = 'mp4';
+    if (contentType.includes('mpeg') || contentType.includes('mp3')) {
+      inputFormat = 'mp3';
+    } else if (contentType.includes('aac')) {
+      inputFormat = 'aac';
+    } else if (contentType.includes('mp4') || contentType.includes('m4a')) {
+      inputFormat = 'mp4';
     }
 
-    // Pipe ffmpeg output to response with explicit chunking
+    console.log(`[streamPreview] Using input format: ${inputFormat}`);
+
+    // Build the FFmpeg command with explicit input format
+    const command = ffmpeg(input)
+      .inputFormat(inputFormat)
+      .format("wav")
+      .audioCodec("pcm_s16le")
+      .audioFrequency(44100)
+      .audioChannels(2)
+      .duration(5) // Keep your 5 second test
+      .outputOptions([
+        '-acodec', 'pcm_s16le',
+        '-ar', '44100',
+        '-ac', '2',
+        '-f', 'wav',
+        '-flags', '+bitexact',
+        '-fflags', '+genpts',
+        '-avoid_negative_ts', 'make_zero'
+      ]);
+
+    // Log FFmpeg command for debugging
+    console.log(`[streamPreview] FFmpeg command created with duration: 5s`);
+
+    // Pipe ffmpeg output to response
     const stream = command.pipe(res, { end: true });
-
-    // Set up streaming with proper chunking
-    let isStreamEnded = false;
-
-    stream.on("data", (chunk) => {
-      // Send chunks as they come
-    });
 
     stream.on("error", (err) => {
       console.error("[streamPreview] Stream error:", err);
-      if (!res.headersSent && !isStreamEnded) {
-        res.status(500).end();
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Stream processing failed",
+          details: err.message
+        });
       }
     });
 
     stream.on("end", () => {
       console.log("[streamPreview] Stream ended successfully");
-      isStreamEnded = true;
     });
 
     req.on("close", () => {
       console.log("[streamPreview] Client disconnected");
-      if (!isStreamEnded) {
-        stream.destroy();
-      }
+      stream.destroy();
     });
 
   } catch (error) {
