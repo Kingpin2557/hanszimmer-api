@@ -90,11 +90,10 @@ export const streamPreview = async (
 
     // Convert to MP3 (faster than WAV)
     const command = ffmpeg(input)
-      .format("mp3")
-      .audioCodec("libmp3lame")
-      .audioBitrate("128k")
-      .audioFrequency(44100)
-      .audioChannels(2);
+          .format("wav")
+          .audioCodec("pcm_s16le")
+          .audioFrequency(44100)
+          .audioChannels(2);
 
     // Handle range requests with ffmpeg
     if (rangeHeader) {
