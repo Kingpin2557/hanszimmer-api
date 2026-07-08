@@ -81,7 +81,7 @@ export const streamPreview = async (
       inputStream.push(null); // Signal end of stream
 
       const command = ffmpeg(inputStream)
-        .inputFormat('mp4')
+        .inputFormat('m4a')
         .audioCodec('pcm_s16le')
         .audioFrequency(44100)
         .audioChannels(2)
