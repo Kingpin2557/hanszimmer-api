@@ -69,12 +69,18 @@ export const streamPreview = async (
     // Convert to WAV using a buffer approach
     console.log(`[streamPreview] Starting FFmpeg conversion...`);
 
-    let wavBuffer: Buffer | null = null;
-    let ffmpegError: Error | null = null;
+    // FIX: Use a variable with explicit type
+    let wavBuffer: Buffer = Buffer.from(''); // Initialize with empty buffer instead of null
 
     await new Promise<void>((resolve, reject) => {
-      const command = ffmpeg()
-        .input(upstreamBuffer)
+      const buffers: Buffer[] = [];
+
+      // Create a readable stream from the buffer
+      const inputStream = new Readable();
+      inputStream.push(upstreamBuffer);
+      inputStream.push(null); // Signal end of stream
+
+      const command = ffmpeg(inputStream)
         .inputFormat('mp4')
         .audioCodec('pcm_s16le')
         .audioFrequency(44100)
@@ -86,17 +92,12 @@ export const streamPreview = async (
           '-ar', '44100',
           '-ac', '2',
           '-f', 'wav'
-        ]);
-
-      const buffers: Buffer[] = [];
-
-      command
+        ])
         .on('start', (cmd) => {
           console.log(`[streamPreview] FFmpeg started: ${cmd}`);
         })
         .on('error', (err) => {
           console.error('[streamPreview] FFmpeg error:', err);
-          ffmpegError = err;
           reject(err);
         })
         .on('end', () => {
@@ -117,11 +118,8 @@ export const streamPreview = async (
       });
     });
 
-    if (ffmpegError) {
-      throw ffmpegError;
-    }
-
-    if (!wavBuffer || wavBuffer.length === 0) {
+    // Now wavBuffer is guaranteed to be a Buffer, not null
+    if (wavBuffer.length === 0) {
       throw new Error('FFmpeg produced empty output');
     }
 
