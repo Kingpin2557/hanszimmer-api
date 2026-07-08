@@ -4,7 +4,7 @@ import path from "path";
 
 import routes from "./routes";
 import { movieQueries } from "./services/movieService";
-import swaggerJsDocs from "swagger-jsdoc";
+import swaggerJsDocs from "swagger-jsdocs";
 import swaggerUi from "swagger-ui-express";
 
 const app: Application = express();
@@ -23,12 +23,20 @@ const corsOptions = {
     } else {
       callback(new Error("Not allowed by CORS"));
     }
-  }
+  },
+  methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "Range", "Content-Range", "Accept-Encoding"],
+  exposedHeaders: ["Content-Range", "Content-Length", "Accept-Ranges"],
+  credentials: true,
+  maxAge: 86400, // 24 hours for preflight cache
 };
 
 // Public read-only data API: allow all origins
 // (consumed by the hanszimmer frontend and the UE5 browser widget).
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly for all routes
+app.options("*", cors(corsOptions));
 
 const swaggerOptions = {
   definition: {
@@ -41,8 +49,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
+        url: process.env.ALLOWED_ORIGINS
+          ? `https://${process.env.ALLOWED_ORIGINS}`
           : `http://localhost:${PORT}`,
       },
     ],
