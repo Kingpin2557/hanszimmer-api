@@ -1,6 +1,6 @@
 import express from "express";
 import { getMovies, getMovieById, getTracksForMovie } from "../controllers/api/ctrlMoviesApi";
-import { streamPreview } from "../controllers/api/ctrlSoundtracksApi";
+import { streamPreview, optionsPreview } from "../controllers/api/ctrlSoundtracksApi";
 import { idValidation } from "../middleware/idValidation";
 
 const router = express.Router();
@@ -76,6 +76,13 @@ router.get("/movie/:id", getMovieById);
 /**
  * @openapi
  * /api/preview/{id}:
+ *   options:
+ *     tags:
+ *       - Soundtracks - Read Operations
+ *     summary: CORS preflight for audio preview
+ *     responses:
+ *       204:
+ *         description: CORS headers set
  *   get:
  *     tags:
  *       - Soundtracks - Read Operations
@@ -89,12 +96,14 @@ router.get("/movie/:id", getMovieById);
  *         description: iTunes track id
  *     responses:
  *       200:
- *         description: Audio stream (audio/mp4)
+ *         description: Audio stream (audio/mpeg)
  *       404:
  *         description: No preview available for this track
  *       502:
  *         description: Upstream preview fetch failed
  */
+// OPTIONS must come BEFORE GET for the same route
+router.options("/preview/:id", optionsPreview);
 router.get("/preview/:id", idValidation, streamPreview);
 
 export default router;

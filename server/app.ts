@@ -4,7 +4,7 @@ import path from "path";
 
 import routes from "./routes";
 import { movieQueries } from "./services/movieService";
-import swaggerJsDocs from "swagger-jsdocs";
+import swaggerJsDocs from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 
 const app: Application = express();
@@ -16,9 +16,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 // 2. Configure CORS options
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
     // Check if the request origin is in our allowed list
-    // !origin allows requests like curl or mobile apps that don't send an origin header
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -35,9 +40,10 @@ const corsOptions = {
 // (consumed by the hanszimmer frontend and the UE5 browser widget).
 app.use(cors(corsOptions));
 
-// Handle preflight requests explicitly for all routes
+// Handle preflight requests globally
 app.options("*", cors(corsOptions));
 
+// Swagger setup
 const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
@@ -75,7 +81,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/", routes);
 
 app.listen(PORT, () => {
-  console.log(`Server draait op http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
 });
 
