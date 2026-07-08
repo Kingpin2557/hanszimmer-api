@@ -5,7 +5,8 @@
   "main": "server/app.ts",
   "scripts": {
     "dev": "nodemon --ext ts --exec ts-node ./server/app.ts",
-    "start": "ts-node ./server/app.ts"
+    "start": "ts-node ./server/app.ts",
+    "build": "tsc"
   },
   "engines": {
     "node": ">=18"
