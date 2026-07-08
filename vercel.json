@@ -16,7 +16,14 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/server/app.ts"
+      "dest": "/server/app.ts",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS, POST, PUT, DELETE, PATCH",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Range, Content-Range, Accept-Encoding",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+        "Access-Control-Max-Age": "86400"
+      }
     }
   ]
 }
