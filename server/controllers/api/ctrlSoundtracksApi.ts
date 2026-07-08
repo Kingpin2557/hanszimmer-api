@@ -6,6 +6,30 @@ import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
 
+// Helper function to get allowed origin
+const getAllowedOrigin = (req: Request): string => {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+  const origin = req.headers.origin;
+
+  // If no origin, return first allowed or *
+  if (!origin) {
+    return allowedOrigins[0] || "*";
+  }
+
+  // Check if origin is allowed
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+    return origin;
+  }
+
+  // If in development, allow all
+  if (process.env.NODE_ENV !== 'production') {
+    return origin;
+  }
+
+  // Default to first allowed or *
+  return allowedOrigins[0] || "*";
+};
+
 export const streamPreview = async (
   req: Request,
   res: Response,
@@ -27,14 +51,11 @@ export const streamPreview = async (
       return;
     }
 
-    // Get allowed origins from environment
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
-    const origin = req.headers.origin;
-    const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+    const allowOrigin = getAllowedOrigin(req);
 
     // Enhanced headers for better compatibility with UE5 web browser
     const headers: Record<string, string> = {
-      "Content-Type": "audio/wav", // Changed to WAV
+      "Content-Type": "audio/wav",
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -72,12 +93,12 @@ export const streamPreview = async (
     // Create ffmpeg command for WAV conversion
     const command = ffmpeg(input)
       .format("wav")
-      .audioCodec("pcm_s16le") // WAV uses PCM encoding
-      .audioFrequency(44100) // Standard sample rate for better compatibility
-      .audioChannels(2) // Stereo
+      .audioCodec("pcm_s16le")
+      .audioFrequency(44100)
+      .audioChannels(2)
       .outputOptions([
-        "-write_xing", "0", // Disable Xing header for better compatibility
-        "-id3v2_version", "3", // Use ID3v2.3 for better compatibility
+        "-write_xing", "0",
+        "-id3v2_version", "3",
       ]);
 
     // Handle range requests with ffmpeg
@@ -86,8 +107,7 @@ export const streamPreview = async (
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : undefined;
 
-      // Seek to the correct position in the stream
-      command.seekInput(start / 1000); // Convert bytes to seconds (approximate)
+      command.seekInput(start / 1000);
 
       if (end) {
         const duration = (end - start) / 1000;
@@ -106,12 +126,10 @@ export const streamPreview = async (
       }
     });
 
-    // Handle stream end
     stream.on("end", () => {
       console.log("Stream ended successfully");
     });
 
-    // Handle client disconnect
     req.on("close", () => {
       console.log("Client disconnected, ending stream");
       stream.destroy();
@@ -128,17 +146,14 @@ export const optionsPreview = (
   req: Request,
   res: Response,
 ): void => {
-  // Get allowed origins from environment
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
-  const origin = req.headers.origin;
-  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+  const allowOrigin = getAllowedOrigin(req);
 
   res.set({
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
     "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
-    "Access-Control-Max-Age": "86400", // 24 hours
+    "Access-Control-Max-Age": "86400",
   });
   res.status(204).end();
 };

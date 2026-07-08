@@ -22,11 +22,18 @@ const corsOptions = {
       return;
     }
 
-    // Check if the request origin is in our allowed list
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
-      callback(null, true);
+    // In production, check against allowed origins
+    if (process.env.NODE_ENV === 'production') {
+      // Check if the request origin is in our allowed list
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+        callback(null, true);
+      } else {
+        console.log(`CORS blocked: ${origin} not in ${allowedOrigins}`);
+        callback(new Error("Not allowed by CORS"));
+      }
     } else {
-      callback(new Error("Not allowed by CORS"));
+      // In development, allow all origins
+      callback(null, true);
     }
   },
   methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE", "PATCH"],
@@ -36,8 +43,7 @@ const corsOptions = {
   maxAge: 86400, // 24 hours for preflight cache
 };
 
-// Public read-only data API: allow all origins
-// (consumed by the hanszimmer frontend and the UE5 browser widget).
+// Apply CORS middleware
 app.use(cors(corsOptions));
 
 // Handle preflight requests globally
@@ -85,9 +91,7 @@ app.listen(PORT, () => {
   console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
 });
 
-// Local dev: warm the movie cache on boot, which also starts the background
-// album enrichment (persisted to server/data/albums.json as it progresses).
-// Skipped on Vercel, where cold starts should stay lazy.
+// Local dev: warm the movie cache on boot
 if (!process.env.VERCEL) {
   void movieQueries
     .getAll()
