@@ -8,6 +8,7 @@ import { countryQueries } from "./countryService";
 import { itunesQueries } from "./itunesService";
 import { albumStore } from "./albumService";
 import { mapWithConcurrency } from "./http";
+import { slugify } from "../utils/slugify";
 import { type Movie } from "../models/movies";
 import { type Album } from "../models/soundtracks";
 
@@ -202,6 +203,22 @@ export const movieQueries = {
     }
 
     return { ...movie, album: albumStore.get(id) };
+  },
+
+  /**
+   * Resolve a movie (with album) by either its TMDB id or its slugified title,
+   * e.g. "155" or "the-dark-knight". Slugs are matched against the warm cache.
+   */
+  getWithAlbumByKey: async (key: string, strict = false): Promise<Movie | null> => {
+    if (/^\d+$/.test(key)) {
+      return movieQueries.getWithAlbum(Number(key), strict);
+    }
+
+    const cache = await getCache();
+    const match = cache.movies.find((movie) => slugify(movie.title) === key);
+    if (!match) return null;
+
+    return movieQueries.getWithAlbum(match.id, strict);
   },
 
   getCachedAt: (): string | null => moviesCache?.cachedAt ?? null,

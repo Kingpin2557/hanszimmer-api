@@ -41,15 +41,15 @@ router.get("/movie", getMovies);
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: TMDB movie id
+ *           type: string
+ *         description: TMDB movie id or slugified title (e.g. 155 or the-dark-knight)
  *     responses:
  *       200:
  *         description: Album info and track list with iTunes 30s preview URLs
  *       404:
  *         description: Movie not found, or no soundtrack album matched
  */
-router.get("/movie/:id/tracks", idValidation, getTracksForMovie);
+router.get("/movie/:id/tracks", getTracksForMovie);
 
 /**
  * @openapi
@@ -57,23 +57,21 @@ router.get("/movie/:id/tracks", idValidation, getTracksForMovie);
  *   get:
  *     tags:
  *       - Movies - Read Operations
- *     summary: Get a single movie by TMDB id
+ *     summary: Get a single movie by TMDB id or slug
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: TMDB movie id
+ *           type: string
+ *         description: TMDB movie id or slugified title (e.g. 155 or the-dark-knight)
  *     responses:
  *       200:
  *         description: The movie
- *       400:
- *         description: Invalid id
  *       404:
  *         description: Movie not found
  */
-router.get("/movie/:id", idValidation, getMovieById);
+router.get("/movie/:id", getMovieById);
 
 /**
  * @openapi

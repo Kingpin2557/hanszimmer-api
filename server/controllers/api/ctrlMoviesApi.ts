@@ -45,9 +45,9 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getMovieById = async (_req: Request, res: Response): Promise<void> => {
+export const getMovieById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const movie = await movieQueries.getWithAlbum(res.locals.numericId);
+    const movie = await movieQueries.getWithAlbumByKey(String(req.params.id));
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
       return;
@@ -60,9 +60,9 @@ export const getMovieById = async (_req: Request, res: Response): Promise<void> 
   }
 };
 
-export const getTracksForMovie = async (_req: Request, res: Response): Promise<void> => {
+export const getTracksForMovie = async (req: Request, res: Response): Promise<void> => {
   try {
-    const movie = await movieQueries.getWithAlbum(res.locals.numericId, true);
+    const movie = await movieQueries.getWithAlbumByKey(String(req.params.id), true);
     if (!movie) {
       res.status(404).json({ error: "Movie not found" });
       return;
