@@ -89,39 +89,23 @@ export const streamPreview = async (
 
     const input = Readable.fromWeb(upstream.body as any);
 
-    // Determine input format
-    let inputFormat = 'mp4';
-    if (contentType.includes('mpeg') || contentType.includes('mp3')) {
-      inputFormat = 'mp3';
-    } else if (contentType.includes('aac')) {
-      inputFormat = 'aac';
-    } else if (contentType.includes('mp4') || contentType.includes('m4a')) {
-      inputFormat = 'mp4';
-    }
+    // FIX: Simplified input format detection - iTunes previews are always AAC in MP4
+    // Just use 'mp4' as the input format
+    console.log(`[streamPreview] Using input format: mp4`);
 
-    console.log(`[streamPreview] Using input format: ${inputFormat}`);
-
-    // Build FFmpeg command - REMOVED -preset ultrafast
+    // FIX: Build FFmpeg command with simpler options
     const command = ffmpeg(input)
-      .inputOptions([
-        '-analyzeduration', '100M',
-        '-probesize', '100M',
-        '-f', inputFormat
-      ])
-      .format("wav")
-      .audioCodec("pcm_s16le")
+      .inputFormat('mp4') // Force mp4 input format
+      .audioCodec('pcm_s16le')
       .audioFrequency(44100)
       .audioChannels(2)
-      .duration(5)
+      .format('wav')
+      .duration(5) // Keep 5 second test
       .outputOptions([
         '-acodec', 'pcm_s16le',
         '-ar', '44100',
         '-ac', '2',
-        '-f', 'wav',
-        '-flags', '+bitexact',
-        '-fflags', '+genpts',
-        '-avoid_negative_ts', 'make_zero',
-        '-map', '0:a'
+        '-f', 'wav'
       ])
       .on('start', (cmd) => {
         console.log(`[streamPreview] FFmpeg started: ${cmd}`);
