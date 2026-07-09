@@ -9,16 +9,12 @@
           "server/**/*.ts",
           "server/data/**/*",
           "node_modules/ffmpeg-static/**/*"
-        ]
+        ],
+        "maxDuration": 60,
+        "memory": 3009
       }
     }
   ],
-  "functions": {
-    "server/app.ts": {
-      "memory": 3009,
-      "maxDuration": 60
-    }
-  },
   "routes": [
     {
       "src": "/(.*)",
