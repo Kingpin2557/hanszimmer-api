@@ -81,18 +81,12 @@ export const streamPreview = async (
       inputStream.push(null); // Signal end of stream
 
       const command = ffmpeg(inputStream)
-        .inputFormat('m4a')
         .audioCodec('pcm_s16le')
         .audioFrequency(44100)
         .audioChannels(2)
         .format('wav')
-        .duration(5) // Keep 5 second test
-        .outputOptions([
-          '-acodec', 'pcm_s16le',
-          '-ar', '44100',
-          '-ac', '2',
-          '-f', 'wav'
-        ])
+
+
         .on('start', (cmd) => {
           console.log(`[streamPreview] FFmpeg started: ${cmd}`);
         })
