@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import fs from "fs";
 import { Readable } from "stream";
 import ffmpeg from "fluent-ffmpeg";
 import { itunesQueries } from "../../services/itunesService";
@@ -78,38 +77,52 @@ export const streamPreview = async (
 
       const inputStream = Readable.from(upstreamBuffer);
 
+      ffmpeg.getAvailableCodecs((err) => {
+        if (err) {
+          console.error("FFmpeg unavailable:", err);
+        } else {
+          console.log("FFmpeg detected");
+        }
+      });
+
       const command = ffmpeg(inputStream)
-         .inputFormat("mp4")
-        .audioCodec('pcm_s16le')
-        .audioChannels(1)
-        .audioFrequency(22050)
-        .format('wav')
-        .on('start', (cmd) => {
-          console.log(`[streamPreview] FFmpeg started: ${cmd}`);
+        .inputFormat("mp4")
+        .audioCodec("pcm_s16le")
+        .audioFrequency(44100)
+        .audioChannels(2)
+        .format("wav")
+        .on("start", (cmd) => {
+          console.log("[FFmpeg]", cmd);
         })
         .on("stderr", (line) => {
-          console.log("[ffmpeg]", line);
+          console.log("[FFmpeg]", line);
         })
-        .on('error', (err) => {
-          console.error('[streamPreview] FFmpeg error:', err);
+        .on("error", (err) => {
+          console.error("[FFmpeg error]", err);
           reject(err);
         })
-        .on('end', () => {
-          console.log('[streamPreview] FFmpeg completed');
+        .on("end", () => {
           wavBuffer = Buffer.concat(buffers);
-          console.log(`[streamPreview] WAV size: ${wavBuffer.length} bytes`);
+
+          console.log(
+            "[streamPreview] WAV header:",
+            wavBuffer.slice(0, 12).toString("ascii")
+          );
+
+          console.log(
+            "[streamPreview] WAV size:",
+            wavBuffer.length
+          );
+
           resolve();
         });
 
-      // Collect output
-      const stream = command.pipe();
-      stream.on('data', (chunk: Buffer) => {
-        buffers.push(chunk);
-      });
-      stream.on('error', (err) => {
-        console.error('[streamPreview] Stream error:', err);
-        reject(err);
-      });
+      command
+        .pipe()
+        .on("data", (chunk: Buffer) => {
+          buffers.push(chunk);
+        })
+        .on("error", reject);
     });
 
 
@@ -135,8 +148,6 @@ export const streamPreview = async (
       throw new Error(`Invalid WAV header: ${waveHeader}`);
     }
 
-    // Save the generated WAV so we can verify it outside the browser.
-    fs.writeFileSync("debug.wav", wavBuffer);
 
     console.log(`[streamPreview] WAV validation passed`);
     console.log(`[streamPreview] Saved debug.wav (${wavBuffer.length} bytes)`);
