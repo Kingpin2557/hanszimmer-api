@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Readable } from "stream";
+import ffmpeg from "fluent-ffmpeg";
 import { itunesQueries } from "../../services/itunesService";
 import { handleError } from "../../middleware/handleError";
 
@@ -50,14 +51,11 @@ export const streamPreview = async (
       return;
     }
 
-    const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
-    console.log(`[streamPreview] Upstream content-type: ${contentType}`);
-
     const allowOrigin = getAllowedOrigin(req);
 
-    // Set headers - forward the original content type
+    // Set headers for MP3 stream
     const headers: Record<string, string> = {
-      "Content-Type": contentType,
+      "Content-Type": "audio/mpeg", // MP3 MIME type
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -66,9 +64,10 @@ export const streamPreview = async (
       "Accept-Ranges": "bytes",
     };
 
-    // Handle range requests
+    // Handle range requests (important for streaming)
     const rangeHeader = req.headers.range;
     if (rangeHeader) {
+      // ... (range handling code remains the same as your previous version)
       const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
       const parts = rangeHeader.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
@@ -87,20 +86,44 @@ export const streamPreview = async (
 
     res.set(headers);
 
-    // Stream directly without conversion - THIS IS THE KEY CHANGE
-    console.log(`[streamPreview] Streaming raw audio directly...`);
-    const stream = Readable.fromWeb(upstream.body as any);
-    stream.pipe(res);
+    const input = Readable.fromWeb(upstream.body as any);
+
+    // Build FFmpeg command to convert to MP3
+    const command = ffmpeg(input)
+      .inputFormat('mp4') // Specify that the input is MP4 container
+      .format('mp3')      // Output format is MP3
+      .audioCodec('libmp3lame') // MP3 codec
+      .audioBitrate('128k') // Standard bitrate
+      .audioFrequency(44100) // CD-quality sample rate
+      .audioChannels(2) // Stereo
+      .outputOptions([
+        '-acodec', 'libmp3lame',
+        '-b:a', '128k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-f', 'mp3'
+      ])
+      .on('start', (cmd) => {
+        console.log(`[streamPreview] FFmpeg started: ${cmd}`);
+      })
+      .on('error', (err) => {
+        console.error('[streamPreview] FFmpeg error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Audio conversion failed", details: err.message });
+        }
+      })
+      .on('end', () => {
+        console.log('[streamPreview] FFmpeg conversion completed');
+      });
+
+    // Pipe the converted MP3 stream to the response
+    const stream = command.pipe(res, { end: true });
 
     stream.on("error", (err) => {
       console.error("[streamPreview] Stream error:", err);
       if (!res.headersSent) {
-        res.status(500).end();
+        res.status(500).json({ error: "Stream processing failed", details: err.message });
       }
-    });
-
-    stream.on("end", () => {
-      console.log("[streamPreview] Stream ended successfully");
     });
 
     req.on("close", () => {
