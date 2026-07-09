@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { Readable } from "stream";
-import ffmpeg from "fluent-ffmpeg";
 import { itunesQueries } from "../../services/itunesService";
 import { handleError } from "../../middleware/handleError";
 
@@ -51,121 +50,63 @@ export const streamPreview = async (
       return;
     }
 
-    console.log(`[streamPreview] Fetching upstream data...`);
-
-    // Read the entire upstream into a buffer first
-    const reader = upstream.body.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-    const upstreamBuffer = Buffer.concat(chunks);
-    console.log(`[streamPreview] Upstream size: ${upstreamBuffer.length} bytes`);
+    const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
+    console.log(`[streamPreview] Upstream content-type: ${contentType}`);
 
     const allowOrigin = getAllowedOrigin(req);
 
-    // Convert to WAV using a buffer approach
-    console.log(`[streamPreview] Starting FFmpeg conversion...`);
-
-    // FIX: Use a variable with explicit type
-    let wavBuffer: Buffer = Buffer.from(''); // Initialize with empty buffer instead of null
-
-    await new Promise<void>((resolve, reject) => {
-      const buffers: Buffer[] = [];
-
-      const inputStream = Readable.from(upstreamBuffer);
-
-      ffmpeg.getAvailableCodecs((err) => {
-        if (err) {
-          console.error("FFmpeg unavailable:", err);
-        } else {
-          console.log("FFmpeg detected");
-        }
-      });
-
-      const command = ffmpeg(inputStream)
-        .inputFormat("mp4")
-        .audioCodec("pcm_s16le")
-        .audioFrequency(44100)
-        .audioChannels(2)
-        .format("wav")
-        .on("start", (cmd) => {
-          console.log("[FFmpeg]", cmd);
-        })
-        .on("stderr", (line) => {
-          console.log("[FFmpeg]", line);
-        })
-        .on("error", (err) => {
-          console.error("[FFmpeg error]", err);
-          reject(err);
-        })
-        .on("end", () => {
-          wavBuffer = Buffer.concat(buffers);
-
-          console.log(
-            "[streamPreview] WAV header:",
-            wavBuffer.slice(0, 12).toString("ascii")
-          );
-
-          console.log(
-            "[streamPreview] WAV size:",
-            wavBuffer.length
-          );
-
-          resolve();
-        });
-
-      command
-        .pipe()
-        .on("data", (chunk: Buffer) => {
-          buffers.push(chunk);
-        })
-        .on("error", reject);
-    });
-
-
-
-
-    // Validate the generated WAV
-    if (wavBuffer.length === 0) {
-      throw new Error("FFmpeg produced empty output");
-    }
-
-    if (wavBuffer.length < 44) {
-      throw new Error(`WAV file too small: ${wavBuffer.length} bytes`);
-    }
-
-    const signature = wavBuffer.slice(0, 4).toString("ascii");
-    const waveHeader = wavBuffer.slice(8, 12).toString("ascii");
-
-    if (signature !== "RIFF") {
-      throw new Error(`Invalid WAV signature: ${signature}`);
-    }
-
-    if (waveHeader !== "WAVE") {
-      throw new Error(`Invalid WAV header: ${waveHeader}`);
-    }
-
-
-    console.log(`[streamPreview] WAV validation passed`);
-    console.log(`[streamPreview] Saved debug.wav (${wavBuffer.length} bytes)`);
-
-    // Set headers
+    // Set headers - forward the original content type
     const headers: Record<string, string> = {
-      "Content-Type": "audio/wav",
+      "Content-Type": contentType,
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
       "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
       "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
       "Accept-Ranges": "bytes",
-      "Content-Length": String(wavBuffer.length),
     };
 
+    // Handle range requests
+    const rangeHeader = req.headers.range;
+    if (rangeHeader) {
+      const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
+      const parts = rangeHeader.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : contentLength - 1;
+      const chunkSize = (end - start) + 1;
+
+      headers["Content-Range"] = `bytes ${start}-${end}/${contentLength}`;
+      headers["Content-Length"] = String(chunkSize);
+      res.status(206);
+    } else {
+      const contentLength = upstream.headers.get('content-length');
+      if (contentLength) {
+        headers["Content-Length"] = contentLength;
+      }
+    }
+
     res.set(headers);
-    res.send(wavBuffer);
+
+    // Stream directly without conversion - THIS IS THE KEY CHANGE
+    console.log(`[streamPreview] Streaming raw audio directly...`);
+    const stream = Readable.fromWeb(upstream.body as any);
+    stream.pipe(res);
+
+    stream.on("error", (err) => {
+      console.error("[streamPreview] Stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
+    });
+
+    stream.on("end", () => {
+      console.log("[streamPreview] Stream ended successfully");
+    });
+
+    req.on("close", () => {
+      console.log("[streamPreview] Client disconnected");
+      stream.destroy();
+    });
 
   } catch (error) {
     console.error("[streamPreview] Fatal error:", error);
