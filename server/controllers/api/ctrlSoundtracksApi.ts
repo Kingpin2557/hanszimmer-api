@@ -69,9 +69,9 @@ export const streamPreview = async (
 
     const allowOrigin = getAllowedOrigin(req);
 
-    // Set headers for MP3 stream
+    // Set headers for Ogg Vorbis stream
     const headers: Record<string, string> = {
-      "Content-Type": "audio/mpeg",
+      "Content-Type": "audio/ogg", // Ogg Vorbis MIME type
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -103,20 +103,20 @@ export const streamPreview = async (
 
     const input = Readable.fromWeb(upstream.body as any);
 
-    // Build FFmpeg command to convert to MP3
+    // Build FFmpeg command to convert to Ogg Vorbis
     const command = ffmpeg(input)
-      .inputFormat('mp4')
-      .format('mp3')
-      .audioCodec('libmp3lame')
-      .audioBitrate('128k')
-      .audioFrequency(44100)
-      .audioChannels(2)
+      .inputFormat('mp4') // iTunes previews are in MP4 container
+      .format('ogg')      // Output format is Ogg container
+      .audioCodec('libvorbis') // Open-source Vorbis codec
+      .audioBitrate('128k') // Standard bitrate
+      .audioFrequency(44100) // CD-quality sample rate
+      .audioChannels(2) // Stereo
       .outputOptions([
-        '-acodec', 'libmp3lame',
+        '-acodec', 'libvorbis',
         '-b:a', '128k',
         '-ar', '44100',
         '-ac', '2',
-        '-f', 'mp3'
+        '-f', 'ogg'
       ])
       .on('start', (cmd) => {
         console.log(`[streamPreview] FFmpeg started: ${cmd}`);
@@ -131,7 +131,7 @@ export const streamPreview = async (
         console.log('[streamPreview] FFmpeg conversion completed');
       });
 
-    // FIX: Get the output stream from FFmpeg, then pipe to response
+    // Get the output stream from FFmpeg, then pipe to response
     const outputStream = command.pipe();
     outputStream.pipe(res, { end: true });
 
