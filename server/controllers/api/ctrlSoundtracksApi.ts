@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import fs from "fs";
 import { Readable } from "stream";
 import ffmpeg from "fluent-ffmpeg";
 import { itunesQueries } from "../../services/itunesService";
@@ -75,20 +76,19 @@ export const streamPreview = async (
     await new Promise<void>((resolve, reject) => {
       const buffers: Buffer[] = [];
 
-      // Create a readable stream from the buffer
-      const inputStream = new Readable();
-      inputStream.push(upstreamBuffer);
-      inputStream.push(null); // Signal end of stream
+      const inputStream = Readable.from(upstreamBuffer);
 
       const command = ffmpeg(inputStream)
+         .inputFormat("mp4")
         .audioCodec('pcm_s16le')
-        .audioFrequency(44100)
-        .audioChannels(2)
+        .audioChannels(1)
+        .audioFrequency(22050)
         .format('wav')
-
-
         .on('start', (cmd) => {
           console.log(`[streamPreview] FFmpeg started: ${cmd}`);
+        })
+        .on("stderr", (line) => {
+          console.log("[ffmpeg]", line);
         })
         .on('error', (err) => {
           console.error('[streamPreview] FFmpeg error:', err);
@@ -112,22 +112,34 @@ export const streamPreview = async (
       });
     });
 
-    // Now wavBuffer is guaranteed to be a Buffer, not null
+
+
+
+    // Validate the generated WAV
     if (wavBuffer.length === 0) {
-      throw new Error('FFmpeg produced empty output');
+      throw new Error("FFmpeg produced empty output");
     }
 
-    // Check WAV signature
     if (wavBuffer.length < 44) {
       throw new Error(`WAV file too small: ${wavBuffer.length} bytes`);
     }
 
-    const signature = wavBuffer.slice(0, 4).toString('ascii');
-    if (signature !== 'RIFF') {
+    const signature = wavBuffer.slice(0, 4).toString("ascii");
+    const waveHeader = wavBuffer.slice(8, 12).toString("ascii");
+
+    if (signature !== "RIFF") {
       throw new Error(`Invalid WAV signature: ${signature}`);
     }
 
-    console.log(`[streamPreview] WAV validation passed, sending response...`);
+    if (waveHeader !== "WAVE") {
+      throw new Error(`Invalid WAV header: ${waveHeader}`);
+    }
+
+    // Save the generated WAV so we can verify it outside the browser.
+    fs.writeFileSync("debug.wav", wavBuffer);
+
+    console.log(`[streamPreview] WAV validation passed`);
+    console.log(`[streamPreview] Saved debug.wav (${wavBuffer.length} bytes)`);
 
     // Set headers
     const headers: Record<string, string> = {
