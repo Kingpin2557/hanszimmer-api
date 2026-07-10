@@ -1,169 +1,106 @@
 import { Request, Response } from "express";
 import { Readable } from "stream";
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from 'ffmpeg-static';
+import ffmpegPath from "ffmpeg-static";
 import { itunesQueries } from "../../services/itunesService";
 import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
 
-// FIX: Handle the case where ffmpegPath might be null
+// Point fluent-ffmpeg at a usable binary.
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
   console.log(`[FFmpeg] Path set to: ${ffmpegPath}`);
 } else {
-  console.error('[FFmpeg] ffmpeg-static failed to find the binary');
-  // Fallback: try to use system ffmpeg if available
   try {
-    ffmpeg.setFfmpegPath('ffmpeg');
-    console.log('[FFmpeg] Using system ffmpeg as fallback');
-  } catch (err) {
-    console.error('[FFmpeg] No ffmpeg binary found');
+    ffmpeg.setFfmpegPath("ffmpeg");
+    console.log("[FFmpeg] Using system ffmpeg as fallback");
+  } catch {
+    console.error("[FFmpeg] No ffmpeg binary found");
   }
 }
+
+// Small in-memory cache of fully-transcoded Ogg previews (~0.5 MB each) so a
+// replayed track is instant and doesn't re-run ffmpeg.
+const oggCache = new Map<string, Buffer>();
 
 const getAllowedOrigin = (req: Request): string => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
   const origin = req.headers.origin;
 
-  if (!origin) {
-    return allowedOrigins[0] || "*";
-  }
-
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
-    return origin;
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    return origin;
-  }
-
+  if (!origin) return allowedOrigins[0] || "*";
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) return origin;
+  if (process.env.NODE_ENV !== "production") return origin;
   return allowedOrigins[0] || "*";
 };
 
-export const streamPreview = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    console.log(`[streamPreview] Processing track: ${res.locals.numericId}`);
-
-    const track = await itunesQueries.getTrackPreview(res.locals.numericId);
-
-    if (!track) {
-      res.status(404).json({ error: "No preview for this track" });
-      return;
-    }
-
-    console.log(`[streamPreview] Preview URL: ${track.previewUrl}`);
-
-    const upstream = await fetch(track.previewUrl);
-
-    if (!upstream.ok || !upstream.body) {
-      console.error(`[streamPreview] Upstream failed: ${upstream.status}`);
-      res.status(502).json({
-        error: `Upstream preview fetch failed (${upstream.status})`,
-      });
-      return;
-    }
-
-    const allowOrigin = getAllowedOrigin(req);
-
-    // Set headers for Ogg Vorbis stream
-    const headers: Record<string, string> = {
-      "Content-Type": "audio/ogg", // Ogg Vorbis MIME type
-      "Cache-Control": `public, max-age=${DAY}`,
-      "Access-Control-Allow-Origin": allowOrigin,
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
-      "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
-      "Accept-Ranges": "bytes",
-    };
-
-    // Handle range requests
-    const rangeHeader = req.headers.range;
-    if (rangeHeader) {
-      const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
-      const parts = rangeHeader.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : contentLength - 1;
-      const chunkSize = (end - start) + 1;
-
-      headers["Content-Range"] = `bytes ${start}-${end}/${contentLength}`;
-      headers["Content-Length"] = String(chunkSize);
-      res.status(206);
-    } else {
-      const contentLength = upstream.headers.get('content-length');
-      if (contentLength) {
-        headers["Content-Length"] = contentLength;
-      }
-    }
-
-    res.set(headers);
-
-    const input = Readable.fromWeb(upstream.body as any);
-
-    // Build FFmpeg command to convert to Ogg Vorbis
-    const command = ffmpeg(input)
-      .inputFormat('mp4') // iTunes previews are in MP4 container
-      .format('ogg')      // Output format is Ogg container
-      .audioCodec('libvorbis') // Open-source Vorbis codec
-      .audioBitrate('128k') // Standard bitrate
-      .audioFrequency(44100) // CD-quality sample rate
-      .audioChannels(2) // Stereo
-      .outputOptions([
-        '-acodec', 'libvorbis',
-        '-b:a', '128k',
-        '-ar', '44100',
-        '-ac', '2',
-        '-f', 'ogg'
-      ])
-      .on('start', (cmd) => {
-        console.log(`[streamPreview] FFmpeg started: ${cmd}`);
-      })
-      .on('error', (err) => {
-        console.error('[streamPreview] FFmpeg error:', err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Audio conversion failed", details: err.message });
+// Transcode an iTunes m4a preview into a COMPLETE Ogg Vorbis buffer. Buffering
+// (rather than piping) lets us send an accurate Content-Length, which is what
+// makes the browser report the real duration and fire "ended" at the end.
+function transcodeToOgg(previewUrl: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    fetch(previewUrl)
+      .then((upstream) => {
+        if (!upstream.ok || !upstream.body) {
+          reject(new Error(`Upstream preview fetch failed (${upstream.status})`));
+          return;
         }
+
+        const input = Readable.fromWeb(upstream.body as any);
+        const chunks: Buffer[] = [];
+
+        const output = ffmpeg(input)
+          .inputFormat("mp4") // iTunes previews are an MP4/AAC container
+          .audioCodec("libvorbis")
+          .audioBitrate("128k")
+          .audioFrequency(44100)
+          .audioChannels(2)
+          .format("ogg")
+          .on("error", reject)
+          .pipe();
+
+        output.on("data", (chunk: Buffer) => chunks.push(chunk));
+        output.on("end", () => resolve(Buffer.concat(chunks)));
+        output.on("error", reject);
       })
-      .on('end', () => {
-        console.log('[streamPreview] FFmpeg conversion completed');
-      });
+      .catch(reject);
+  });
+}
 
-    // Get the output stream from FFmpeg, then pipe to response
-    const outputStream = command.pipe();
-    outputStream.pipe(res, { end: true });
+export const streamPreview = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = String(res.locals.numericId);
 
-    outputStream.on("error", (err) => {
-      console.error("[streamPreview] Output stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Stream processing failed", details: err.message });
+    let ogg = oggCache.get(id);
+    if (!ogg) {
+      const track = await itunesQueries.getTrackPreview(res.locals.numericId);
+      if (!track) {
+        res.status(404).json({ error: "No preview for this track" });
+        return;
       }
-    });
+      ogg = await transcodeToOgg(track.previewUrl);
+      oggCache.set(id, ogg);
+    }
 
-    req.on("close", () => {
-      console.log("[streamPreview] Client disconnected");
-      outputStream.destroy();
+    res.set({
+      "Content-Type": "audio/ogg",
+      "Content-Length": String(ogg.length), // accurate length -> real duration + "ended"
+      "Cache-Control": `public, max-age=${DAY}`,
+      "Access-Control-Allow-Origin": getAllowedOrigin(req),
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Access-Control-Expose-Headers": "Content-Length, Content-Type",
     });
-
+    res.status(200).end(ogg);
   } catch (error) {
-    console.error("[streamPreview] Fatal error:", error);
     handleError(res, error);
   }
 };
 
-export const optionsPreview = (
-  req: Request,
-  res: Response,
-): void => {
-  const allowOrigin = getAllowedOrigin(req);
-
+export const optionsPreview = (req: Request, res: Response): void => {
   res.set({
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": getAllowedOrigin(req),
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Encoding, Content-Type",
-    "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
     "Access-Control-Max-Age": "86400",
   });
   res.status(204).end();
