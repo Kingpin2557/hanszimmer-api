@@ -46,7 +46,7 @@ const resolveAllAlbums = async (cache: MoviesCache): Promise<void> => {
   const missing = cache.movies.filter((movie) => !albumStore.has(movie.id) || !albumStore.get(movie.id));
   if (missing.length === 0) return;
 
-  const catalog = await itunesQueries.getArtistCatalog("Hans Zimmer");
+  const catalog = await itunesQueries.getCatalog("Hans Zimmer");
   if (catalog.length === 0) {
     console.warn("album catalog fetch returned nothing — skipping album matching");
     return;

@@ -5,7 +5,7 @@
  * Apple rate-limits to roughly 20 requests/minute per IP.
  * fetchJson retries 403/429 with backoff; the build script throttles on top of that.
  */
-import { fetchJson, sleep } from "./http";
+import { fetchJson } from "./http";
 import { type Album, type AlbumMatchType, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
 
 const ITUNES_BASE: string = process.env.ITUNES_BASE_URL || "https://itunes.apple.com";
@@ -92,10 +92,22 @@ const normalizeAlbum = (album: ItunesResult): Album => ({
   itunesUrl: album.collectionViewUrl ?? null,
 });
 
-const searchAlbums = async (term: string): Promise<ItunesResult[]> => {
-  const url = `${ITUNES_BASE}/search?term=${encodeURIComponent(term)}&entity=album&media=music&limit=10&country=${COUNTRY}`;
-  const data = await fetchJson<ItunesResponse>(url, { label: "iTunes search" });
-  return (data.results || []).filter((result) => result.wrapperType === "collection");
+// Hans Zimmer album catalog, cached in memory (no local JSON file).
+const CATALOG_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+let catalogCache: { albums: ItunesResult[]; expiresAt: number } | null = null;
+
+/**
+ * The non-junk, Zimmer-credited album with the most tracks — a "greatest hits"
+ * style compilation, used as the always-Hans-Zimmer fallback.
+ */
+const pickCompilation = (catalog: ItunesResult[]): ItunesResult | null => {
+  let best: ItunesResult | null = null;
+  for (const album of catalog) {
+    if (isJunk(album)) continue;
+    if (!/zimmer/i.test(album.artistName || "")) continue;
+    if (!best || (album.trackCount ?? 0) > (best.trackCount ?? 0)) best = album;
+  }
+  return best;
 };
 
 // Track lookups (request time) — cached in memory per instance.
@@ -127,6 +139,14 @@ export const itunesQueries = {
     const lookupUrl = `${ITUNES_BASE}/lookup?id=${artist.artistId}&entity=album&limit=200&country=${COUNTRY}`;
     const data = await fetchJson<ItunesResponse>(lookupUrl, { label: "iTunes artist albums" });
     return (data.results || []).filter((result) => result.wrapperType === "collection");
+  },
+
+  /** Hans Zimmer's catalog, cached in memory for CATALOG_TTL_MS. */
+  getCatalog: async (artistName: string = "Hans Zimmer"): Promise<ItunesResult[]> => {
+    if (catalogCache && Date.now() < catalogCache.expiresAt) return catalogCache.albums;
+    const albums = await itunesQueries.getArtistCatalog(artistName);
+    catalogCache = { albums, expiresAt: Date.now() + CATALOG_TTL_MS };
+    return albums;
   },
 
   /**
@@ -171,34 +191,17 @@ export const itunesQueries = {
       if (fuzzyBest) return withType(fuzzyBest, "fuzzy");
     }
 
-    // No exact/fuzzy title match — return null rather than an unrelated album,
-    // so a shown soundtrack always corresponds to the movie.
-    return null;
+    // No exact/fuzzy title match — fall back to a Hans Zimmer compilation (with
+    // lots of his songs) so the player always plays genuine Hans Zimmer music.
+    const compilation = pickCompilation(catalog);
+    return compilation ? withType(compilation, "fallback") : null;
   },
 
   findAlbum: async (movieTitle: string): Promise<Album | null> => {
-    const pick = (candidates: ItunesResult[], requireZimmer: boolean): ItunesResult | null => {
-      let best: ItunesResult | null = null;
-      let bestScore = 0;
-      for (const candidate of candidates) {
-        const score = scoreAlbum(candidate, movieTitle, requireZimmer);
-        if (score > bestScore) {
-          best = candidate;
-          bestScore = score;
-        }
-      }
-      return best;
-    };
-
-    let best = pick(await searchAlbums(`${movieTitle} Hans Zimmer`), false);
-
-    // Fallback: broader search, but strictly Zimmer-credited results only
-    if (!best) {
-      await sleep(1000);
-      best = pick(await searchAlbums(`${movieTitle} soundtrack`), true);
-    }
-
-    return best ? normalizeAlbum(best) : null;
+    // Match against Hans Zimmer's iTunes catalog (title/composer semi-match);
+    // matchFromCatalog falls back to a compilation, so it is always his music.
+    const catalog = await itunesQueries.getCatalog("Hans Zimmer");
+    return itunesQueries.matchFromCatalog(movieTitle, 0, catalog);
   },
 
   /**
