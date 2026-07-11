@@ -7,8 +7,7 @@
       "config": {
         "includeFiles": [
           "server/**/*.ts",
-          "server/data/**/*",
-          "node_modules/ffmpeg-static/**/*"
+          "server/data/**/*"
         ],
         "maxDuration": 60,
         "memory": 3009
