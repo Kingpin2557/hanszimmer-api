@@ -1,17 +1,9 @@
-/**
- * iTunes Search API — no auth, no API key.
- * Docs: https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
- *
- * Apple rate-limits to roughly 20 requests/minute per IP.
- * fetchJson retries 403/429 with backoff; the build script throttles on top of that.
- */
 import { fetchJson } from "./http";
 import { type Album, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
 
 const ITUNES_BASE: string = process.env.ITUNES_BASE_URL || "https://itunes.apple.com";
 const COUNTRY: string = process.env.ITUNES_COUNTRY || "US";
 
-/** Raw iTunes result item (only the fields we read). */
 export interface ItunesResult {
   wrapperType: string;
   kind?: string;
@@ -38,12 +30,9 @@ interface ItunesResponse {
 
 const BAD_ALBUM_WORDS = ["tribute", "karaoke", "inspired by", "lullaby", "ringtone", "cover version", "- single", " ep)"];
 
-// Soundtrack descriptors stripped before comparing an album title to a movie
-// title, so "Dune: Part Two (Original Motion Picture Soundtrack)" -> "dune part two".
 const SOUNDTRACK_SUFFIX =
   /\b(original motion picture soundtrack|music from the motion picture|original television soundtrack|original series soundtrack|motion picture soundtrack|original soundtrack|original score|soundtrack|score)\b/g;
 
-/** Lowercase; drop (parenthetical)/[bracket] groups, soundtrack words, punctuation. */
 const canonicalTitle = (title: string): string =>
   title
     .toLowerCase()
@@ -54,11 +43,9 @@ const canonicalTitle = (title: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** Upscale Apple artwork from the default 100x100 thumbnail. */
 const artwork = (url: string | undefined, size = 600): string | null =>
   url ? url.replace(/100x100bb/, `${size}x${size}bb`) : null;
 
-/** Reject tributes, karaoke, "inspired by", singles, etc. */
 const isJunk = (album: ItunesResult): boolean =>
   BAD_ALBUM_WORDS.some((bad) => (album.collectionName || "").toLowerCase().includes(bad));
 
@@ -108,21 +95,14 @@ export const itunesQueries = {
     return (data.results || []).filter((result) => result.wrapperType === "collection");
   },
 
-  /** Hans Zimmer's catalog, cached in memory for CATALOG_TTL_MS. */
-  getCatalog: async (artistName: string = "Hans Zimmer"): Promise<ItunesResult[]> => {
+    getCatalog: async (artistName: string = "Hans Zimmer"): Promise<ItunesResult[]> => {
     if (catalogCache && Date.now() < catalogCache.expiresAt) return catalogCache.albums;
     const albums = await itunesQueries.getArtistCatalog(artistName);
     catalogCache = { albums, expiresAt: Date.now() + CATALOG_TTL_MS };
     return albums;
   },
 
-  /**
-   * Match a movie against a prefetched catalog (no network). EXACT ONLY: the
-   * album's canonical title (minus soundtrack descriptors) must equal the movie's
-   * canonical title AND be credited to Hans Zimmer. No fuzzy matching and no
-   * compilation fallback — an unmatched movie returns null so the caller hides it.
-   */
-  matchFromCatalog: (movieTitle: string, _movieId: number, catalog: ItunesResult[]): Album | null => {
+    matchFromCatalog: (movieTitle: string, _movieId: number, catalog: ItunesResult[]): Album | null => {
     const target = canonicalTitle(movieTitle);
     if (!target) return null;
 
@@ -139,13 +119,12 @@ export const itunesQueries = {
   },
 
   findAlbum: async (movieTitle: string): Promise<Album | null> => {
-    // Exact-match a movie title against Hans Zimmer's iTunes catalog.
+
     const catalog = await itunesQueries.getCatalog("Hans Zimmer");
     return itunesQueries.matchFromCatalog(movieTitle, 0, catalog);
   },
 
-  /** A Hans Zimmer "Live" album (the fullest one), used for tour players. */
-  findLiveAlbum: async (): Promise<Album | null> => {
+    findLiveAlbum: async (): Promise<Album | null> => {
     const catalog = await itunesQueries.getCatalog("Hans Zimmer");
     let best: ItunesResult | null = null;
     for (const album of catalog) {
@@ -157,10 +136,7 @@ export const itunesQueries = {
     return best ? { ...normalizeAlbum(best), matchType: "exact" } : null;
   },
 
-  /**
-   * Fetch all tracks (with 30s previewUrl) for an iTunes album id.
-   */
-  getAlbumTracks: async (albumId: number | string): Promise<AlbumTracks> => {
+    getAlbumTracks: async (albumId: number | string): Promise<AlbumTracks> => {
     const key = String(albumId);
     const cached = trackCache.get(key);
     if (cached) return cached;

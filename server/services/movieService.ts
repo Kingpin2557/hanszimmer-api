@@ -1,8 +1,3 @@
-/**
- * Live movie data: TMDB filmography fetched on demand and cached in memory (TTL),
- * with CDN cache headers doing the heavy lifting on Vercel.
- * iTunes soundtrack albums are resolved lazily per movie (Apple rate limit ~20 req/min).
- */
 import { tmdbQueries, type TmdbMovieDetail } from "./tmdbService";
 import { countryQueries } from "./countryService";
 import { itunesQueries } from "./itunesService";
@@ -15,7 +10,7 @@ import { type Album } from "../models/soundtracks";
 const HANS_ZIMMER_PERSON_ID = 947;
 const COMPOSER_JOBS = new Set(["Original Music Composer", "Music", "Composer"]);
 const TMDB_IMG: string = process.env.TMDB_IMAGE_BASE_URL || "https://image.tmdb.org/t/p";
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const DETAIL_CONCURRENCY = 12;
 
 interface MoviesCache {
@@ -28,7 +23,6 @@ interface MoviesCache {
 let moviesCache: MoviesCache | null = null;
 let inFlight: Promise<MoviesCache> | null = null;
 
-// Composer credits (movie id -> job), cached alongside the movie list TTL
 let creditsCache: { jobs: Map<number, string>; expiresAt: number } | null = null;
 
 const withAlbum = (movie: Movie): Movie => ({
@@ -36,13 +30,8 @@ const withAlbum = (movie: Movie): Movie => ({
   album: albumStore.get(movie.id),
 });
 
-/**
- * Resolve ALL missing albums in one pass: fetch Hans Zimmer's full iTunes
- * album catalog (2 requests) and match every movie against it locally.
- * Unmatched movies are stored as null (no exact soundtrack match).
- */
 const resolveAllAlbums = async (cache: MoviesCache): Promise<void> => {
-  // also re-match movies stored as null: fallback matching guarantees them music now
+
   const missing = cache.movies.filter((movie) => !albumStore.has(movie.id) || !albumStore.get(movie.id));
   if (missing.length === 0) return;
 
@@ -104,7 +93,7 @@ const buildCache = async (): Promise<MoviesCache> => {
   const fetched = await mapWithConcurrency(ids, DETAIL_CONCURRENCY, async (id) => {
     try {
       const detail = await tmdbQueries.getMovie(id);
-      // Skip unreleased/obscure entries that a kiosk can't display properly
+
       if (!detail.poster_path || !detail.release_date) return null;
       return toMovie(detail, jobs.get(id) ?? null);
     } catch (error) {

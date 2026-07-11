@@ -7,7 +7,6 @@ import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
 
-// Point fluent-ffmpeg at a usable binary.
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
   console.log(`[FFmpeg] Path set to: ${ffmpegPath}`);
@@ -20,8 +19,6 @@ if (ffmpegPath) {
   }
 }
 
-// Small in-memory cache of fully-transcoded Ogg previews (~0.5 MB each) so a
-// replayed track is instant and doesn't re-run ffmpeg.
 const oggCache = new Map<string, Buffer>();
 
 const getAllowedOrigin = (req: Request): string => {
@@ -34,9 +31,6 @@ const getAllowedOrigin = (req: Request): string => {
   return allowedOrigins[0] || "*";
 };
 
-// Transcode an iTunes m4a preview into a COMPLETE Ogg Vorbis buffer. Buffering
-// (rather than piping) lets us send an accurate Content-Length, which is what
-// makes the browser report the real duration and fire "ended" at the end.
 function transcodeToOgg(previewUrl: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     fetch(previewUrl)
@@ -50,7 +44,7 @@ function transcodeToOgg(previewUrl: string): Promise<Buffer> {
         const chunks: Buffer[] = [];
 
         const output = ffmpeg(input)
-          .inputFormat("mp4") // iTunes previews are an MP4/AAC container
+          .inputFormat("mp4")
           .audioCodec("libvorbis")
           .audioBitrate("128k")
           .audioFrequency(44100)
@@ -84,7 +78,7 @@ export const streamPreview = async (req: Request, res: Response): Promise<void> 
 
     res.set({
       "Content-Type": "audio/ogg",
-      "Content-Length": String(ogg.length), // accurate length -> real duration + "ended"
+      "Content-Length": String(ogg.length),
       "Cache-Control": `public, max-age=${DAY}`,
       "Access-Control-Allow-Origin": getAllowedOrigin(req),
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",

@@ -1,11 +1,3 @@
-/**
- * Hans Zimmer live tours from setlist.fm, grouped into located trails.
- *
- * setlist.fm needs an API key (SETLIST_API_KEY) sent as the x-api-key header;
- * it is free for non-commercial use. Data is fetched live and cached in memory
- * (tours change rarely). Setlists without a tour name or venue coordinates are
- * skipped, so every stop we keep can be placed on the globe.
- */
 import { slugify } from "../utils/slugify";
 import { itunesQueries } from "./itunesService";
 import { sleep } from "./http";
@@ -13,8 +5,8 @@ import { type Tour, type TourStop } from "../models/tours";
 
 const SETLIST_BASE = "https://api.setlist.fm/rest/1.0";
 const HZ_MBID = "e6de1f3b-6484-491c-88dd-6d619f142abc";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const MAX_PAGES = 15; // 20 setlists/page
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_PAGES = 15;
 
 interface SetlistCity {
   name?: string;
@@ -33,7 +25,6 @@ interface SetlistPage {
   setlist?: SetlistItem[];
 }
 
-/** "dd-MM-yyyy" -> ISO "yyyy-mm-dd" (or "" when unparseable). */
 const toIso = (d?: string): string => {
   const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(d ?? "");
   return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
@@ -49,7 +40,7 @@ async function fetchSetlistPage(page: number): Promise<SetlistPage | null> {
       headers: { Accept: "application/json", "x-api-key": key },
     });
     if (res.ok) return (await res.json()) as SetlistPage;
-    if (res.status === 404) return null; // no setlists / past last page
+    if (res.status === 404) return null;
     if (res.status === 429 || res.status >= 500) {
       await sleep(1200 * attempt);
       continue;
@@ -74,10 +65,9 @@ async function build(): Promise<ToursCache> {
     if (!page?.setlist?.length) break;
     items.push(...page.setlist);
     if (page.page * page.itemsPerPage >= page.total) break;
-    await sleep(600); // stay under setlist.fm's rate limit
+    await sleep(600);
   }
 
-  // Group located stops by tour name.
   const groups = new Map<string, TourStop[]>();
   for (const item of items) {
     const name = item.tour?.name?.trim();
@@ -112,7 +102,7 @@ async function build(): Promise<ToursCache> {
   const tours: Tour[] = [];
   for (const [name, rawStops] of groups) {
     const ordered = rawStops.filter((s) => s.date).sort((a, b) => a.date.localeCompare(b.date));
-    // Collapse consecutive nights in the same city into one trail point.
+
     const trail: TourStop[] = [];
     for (const s of ordered) {
       const prev = trail[trail.length - 1];
@@ -134,7 +124,6 @@ async function build(): Promise<ToursCache> {
     });
   }
 
-  // Most recent tours first.
   tours.sort((a, b) =>
     (b.stops[b.stops.length - 1]?.date ?? "").localeCompare(a.stops[a.stops.length - 1]?.date ?? ""),
   );

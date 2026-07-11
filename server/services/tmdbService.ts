@@ -1,6 +1,3 @@
-/**
- * TMDB client — needs TMDB_API_KEY (set it in .env locally and as a Vercel env var).
- */
 import dotenv from "dotenv";
 import { fetchJson } from "./http";
 

@@ -1,7 +1,3 @@
-/**
- * fetchJson — fetch with retry + exponential backoff.
- * Retries on network errors, 429 (rate limit), 403 (iTunes rate limit) and 5xx.
- */
 const isRetryable = (status: number): boolean =>
   status === 429 || status === 403 || status >= 500;
 
@@ -51,10 +47,6 @@ export async function fetchJson<T = unknown>(
   throw new Error(`${label}: exhausted retries`);
 }
 
-/**
- * Run an async mapper over items with a concurrency limit
- * (used for the TMDB movie-detail fan-out).
- */
 export async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,

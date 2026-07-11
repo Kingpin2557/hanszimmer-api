@@ -1,9 +1,3 @@
-/**
- * Country name + map coordinates from a bundled static dataset
- * (ISO 3166-1 alpha-2 -> centroid lat/lng, source: Google canonical countries.csv, CC-BY 4.0).
- * No external calls: country centroids are static data, and the previous
- * runtime dependency (restcountries.com v3.1) got deprecated and broke.
- */
 import countries from "../data/countries.json";
 import { type Country } from "../models/movies";
 

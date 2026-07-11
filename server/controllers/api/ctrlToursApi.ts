@@ -11,7 +11,6 @@ const cache = (res: Response, seconds: number = 6 * 3600): void => {
   );
 };
 
-/** All Hans Zimmer tours as located trails (start point + full stop list). */
 export const getTours = async (_req: Request, res: Response): Promise<void> => {
   try {
     if (!process.env.SETLIST_API_KEY) {
@@ -27,7 +26,6 @@ export const getTours = async (_req: Request, res: Response): Promise<void> => {
   }
 };
 
-/** A single tour by slug. */
 export const getTourBySlug = async (req: Request, res: Response): Promise<void> => {
   try {
     const tour = await tourQueries.get(String(req.params.slug));
@@ -43,7 +41,6 @@ export const getTourBySlug = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-/** Tracks (with 30s previews) for any iTunes album id — used by the tour player. */
 export const getAlbumTracks = async (req: Request, res: Response): Promise<void> => {
   try {
     const { album, tracks } = await itunesQueries.getAlbumTracks(String(req.params.id));

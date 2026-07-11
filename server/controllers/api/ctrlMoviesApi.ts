@@ -13,9 +13,8 @@ const cache = (res: Response, seconds: number = 6 * 3600): void => {
 
 export const getMovies = async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log("[getMovies] Starting request"); // Debug log
+    console.log("[getMovies] Starting request");
 
-    // Check if TMDB_API_KEY is set
     if (!process.env.TMDB_API_KEY) {
       console.error("[getMovies] TMDB_API_KEY is not set!");
       res.status(500).json({
@@ -25,7 +24,7 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    console.log("[getMovies] TMDB_API_KEY is set"); // Debug log
+    console.log("[getMovies] TMDB_API_KEY is set");
 
     cache(res, 900);
 
@@ -34,14 +33,14 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
       const limit = Math.min(50, parseInt(req.query.limit as string) || 5);
       const offset = (page - 1) * limit;
 
-      console.log(`[getMovies] Fetching page ${page}, limit ${limit}`); // Debug log
+      console.log(`[getMovies] Fetching page ${page}, limit ${limit}`);
 
       const [movies, total] = await Promise.all([
         movieQueries.getPaginated(limit, offset),
         movieQueries.getCount(),
       ]);
 
-      console.log(`[getMovies] Found ${movies.length} movies, total ${total}`); // Debug log
+      console.log(`[getMovies] Found ${movies.length} movies, total ${total}`);
 
       res.status(200).json({
         movies,
@@ -52,10 +51,10 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
         cachedAt: movieQueries.getCachedAt(),
       });
     } else {
-      console.log("[getMovies] Fetching all movies"); // Debug log
+      console.log("[getMovies] Fetching all movies");
       const movies = await movieQueries.getAll();
 
-      console.log(`[getMovies] Found ${movies.length} movies`); // Debug log
+      console.log(`[getMovies] Found ${movies.length} movies`);
 
       res.status(200).json({
         count: movies.length,
@@ -72,7 +71,7 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
 
 export const getMovieById = async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log(`[getMovieById] Fetching movie: ${req.params.id}`); // Debug log
+    console.log(`[getMovieById] Fetching movie: ${req.params.id}`);
 
     const movie = await movieQueries.getWithAlbumByKey(String(req.params.id));
     if (!movie) {
@@ -90,7 +89,7 @@ export const getMovieById = async (req: Request, res: Response): Promise<void> =
 
 export const getTracksForMovie = async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log(`[getTracksForMovie] Fetching tracks for movie: ${req.params.id}`); // Debug log
+    console.log(`[getTracksForMovie] Fetching tracks for movie: ${req.params.id}`);
 
     const movie = await movieQueries.getWithAlbumByKey(String(req.params.id), true);
     if (!movie) {

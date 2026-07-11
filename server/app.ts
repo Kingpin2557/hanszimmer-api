@@ -10,21 +10,18 @@ import swaggerUi from "swagger-ui-express";
 const app: Application = express();
 const PORT: number = parseInt(<string>process.env.PORT, 10) || 3000;
 
-// 1. Get the string from env and convert it to an array
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
-// 2. Configure CORS options
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps, curl, etc)
+
     if (!origin) {
       callback(null, true);
       return;
     }
 
-    // In production, check against allowed origins
     if (process.env.NODE_ENV === 'production') {
-      // Check if the request origin is in our allowed list
+
       if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
         callback(null, true);
       } else {
@@ -32,7 +29,7 @@ const corsOptions = {
         callback(new Error("Not allowed by CORS"));
       }
     } else {
-      // In development, allow all origins
+
       callback(null, true);
     }
   },
@@ -40,23 +37,20 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "Range", "Content-Range", "Accept-Encoding"],
   exposedHeaders: ["Content-Range", "Content-Length", "Accept-Ranges"],
   credentials: true,
-  maxAge: 86400, // 24 hours for preflight cache
+  maxAge: 86400,
 };
 
-// Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Handle preflight requests - use a different approach instead of app.options("*")
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.method === 'OPTIONS') {
-    // Use the same CORS options
+
     cors(corsOptions)(req, res, next);
   } else {
     next();
   }
 });
 
-// Swagger setup
 const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
@@ -97,7 +91,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/", routes);
 
-// Global error handler - must be after all routes
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error("Unhandled error:", err.message);
   console.error(err.stack);
@@ -108,7 +101,6 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
 });
@@ -118,7 +110,6 @@ app.listen(PORT, () => {
   console.log(`Swagger UI: http://localhost:${PORT}/api-docs`);
 });
 
-// Local dev: warm the movie cache on boot
 if (!process.env.VERCEL) {
   void movieQueries
     .getAll()
