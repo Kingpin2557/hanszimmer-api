@@ -117,7 +117,6 @@ const buildCache = async (): Promise<MoviesCache> => {
 const getCache = async (): Promise<MoviesCache> => {
   if (moviesCache && Date.now() < moviesCache.expiresAt) return moviesCache;
 
-  // Share the in-flight build so concurrent requests don't stampede TMDB
   if (!inFlight) {
     inFlight = buildCache()
       .then((cache) => {
@@ -128,6 +127,12 @@ const getCache = async (): Promise<MoviesCache> => {
         inFlight = null;
       });
   }
+
+  if (moviesCache) {
+    void inFlight.catch(() => {});
+    return moviesCache;
+  }
+
   return inFlight;
 };
 

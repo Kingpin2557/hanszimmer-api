@@ -20,5 +20,11 @@
       "src": "/(.*)",
       "dest": "server/app.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/warm",
+      "schedule": "0 4 * * *"
+    }
   ]
 }

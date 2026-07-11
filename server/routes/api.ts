@@ -1,5 +1,5 @@
 import express from "express";
-import { getMovies, getMovieById, getTracksForMovie } from "../controllers/api/ctrlMoviesApi";
+import { getMovies, getMovieById, getTracksForMovie, getWarm } from "../controllers/api/ctrlMoviesApi";
 import { streamPreview, optionsPreview } from "../controllers/api/ctrlSoundtracksApi";
 import { getTours, getTourBySlug, getAlbumTracks } from "../controllers/api/ctrlToursApi";
 import { idValidation } from "../middleware/idValidation";
@@ -18,6 +18,7 @@ router.get("/health", (req: express.Request, res: express.Response) => {
 });
 
 router.get("/movie", getMovies);
+router.get("/warm", getWarm);
 
 router.get("/movie/:id/tracks", getTracksForMovie);
 

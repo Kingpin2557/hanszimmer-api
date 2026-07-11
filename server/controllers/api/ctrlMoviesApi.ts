@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { movieQueries } from "../../services/movieService";
 import { itunesQueries } from "../../services/itunesService";
+import { tourQueries } from "../../services/setlistService";
 import { handleError } from "../../middleware/handleError";
 
 const DAY = 86400;
@@ -26,7 +27,7 @@ export const getMovies = async (req: Request, res: Response): Promise<void> => {
 
     console.log("[getMovies] TMDB_API_KEY is set");
 
-    cache(res, 900);
+    cache(res, 6 * 3600);
 
     if (req.query.page || req.query.limit) {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -115,4 +116,11 @@ export const getTracksForMovie = async (req: Request, res: Response): Promise<vo
     console.error("[getTracksForMovie] Error:", error);
     handleError(res, error);
   }
+};
+
+export const getWarm = async (_req: Request, res: Response): Promise<void> => {
+  const tasks: Promise<unknown>[] = [movieQueries.getAll()];
+  if (process.env.SETLIST_API_KEY) tasks.push(tourQueries.getAll());
+  await Promise.allSettled(tasks);
+  res.status(200).json({ warmed: true, at: new Date().toISOString() });
 };

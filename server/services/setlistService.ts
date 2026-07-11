@@ -143,6 +143,10 @@ async function getCache(): Promise<ToursCache> {
         inFlight = null;
       });
   }
+  if (cache) {
+    void inFlight.catch(() => {});
+    return cache;
+  }
   return inFlight;
 }
 
