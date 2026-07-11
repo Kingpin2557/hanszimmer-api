@@ -39,7 +39,7 @@ const withAlbum = (movie: Movie): Movie => ({
 /**
  * Resolve ALL missing albums in one pass: fetch Hans Zimmer's full iTunes
  * album catalog (2 requests) and match every movie against it locally.
- * Unmatched movies are stored as null; albums.json is written once.
+ * Unmatched movies are stored as null (no exact soundtrack match).
  */
 const resolveAllAlbums = async (cache: MoviesCache): Promise<void> => {
   // also re-match movies stored as null: fallback matching guarantees them music now
@@ -150,7 +150,7 @@ export const movieQueries = {
     } catch (error) {
       console.warn(`album matching failed: ${(error as Error).message}`);
     }
-    return cache.movies.map(withAlbum);
+    return cache.movies.map(withAlbum).filter((movie) => movie.album !== null);
   },
 
   getCount: async (): Promise<number> => (await getCache()).movies.length,
@@ -162,7 +162,10 @@ export const movieQueries = {
     } catch (error) {
       console.warn(`album matching failed: ${(error as Error).message}`);
     }
-    return cache.movies.slice(offset, offset + limit).map(withAlbum);
+    return cache.movies
+      .map(withAlbum)
+      .filter((movie) => movie.album !== null)
+      .slice(offset, offset + limit);
   },
 
   /** How many movies have a matched (non-null) album so far. */
@@ -198,11 +201,14 @@ export const movieQueries = {
       } catch (error) {
         console.warn(`iTunes album lookup failed for "${movie.title}": ${(error as Error).message}`);
         if (strict) throw error;
-        return { ...movie, album: null };
+        return null;
       }
     }
 
-    return { ...movie, album: albumStore.get(id) };
+    // No exact soundtrack match -> hide the movie (keeps list and detail in sync).
+    const album = albumStore.get(id);
+    if (!album) return null;
+    return { ...movie, album };
   },
 
   /**

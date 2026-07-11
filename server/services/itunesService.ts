@@ -6,7 +6,7 @@
  * fetchJson retries 403/429 with backoff; the build script throttles on top of that.
  */
 import { fetchJson } from "./http";
-import { type Album, type AlbumMatchType, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
+import { type Album, type AlbumTracks, type Track, type TrackPreview } from "../models/soundtracks";
 
 const ITUNES_BASE: string = process.env.ITUNES_BASE_URL || "https://itunes.apple.com";
 const COUNTRY: string = process.env.ITUNES_COUNTRY || "US";
@@ -36,50 +36,31 @@ interface ItunesResponse {
   results: ItunesResult[];
 }
 
-const STOP_WORDS = new Set([
-  "a", "an", "the", "and", "but", "or", "of", "in", "on", "at", "for", "with", "from", "to", "is", "it",
-]);
-
 const BAD_ALBUM_WORDS = ["tribute", "karaoke", "inspired by", "lullaby", "ringtone", "cover version", "- single", " ep)"];
 
-const significantWords = (title: string): string[] =>
+// Soundtrack descriptors stripped before comparing an album title to a movie
+// title, so "Dune: Part Two (Original Motion Picture Soundtrack)" -> "dune part two".
+const SOUNDTRACK_SUFFIX =
+  /\b(original motion picture soundtrack|music from the motion picture|original television soundtrack|original series soundtrack|motion picture soundtrack|original soundtrack|original score|soundtrack|score)\b/g;
+
+/** Lowercase; drop (parenthetical)/[bracket] groups, soundtrack words, punctuation. */
+const canonicalTitle = (title: string): string =>
   title
     .toLowerCase()
-    .replace(/[^\w\s]/g, "")
-    .split(/\s+/)
-    .filter((word) => word.length > 0 && !STOP_WORDS.has(word));
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(SOUNDTRACK_SUFFIX, " ")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** Upscale Apple artwork from the default 100x100 thumbnail. */
 const artwork = (url: string | undefined, size = 600): string | null =>
   url ? url.replace(/100x100bb/, `${size}x${size}bb`) : null;
 
-/**
- * Score how well an iTunes album matches a movie title.
- * All significant movie-title words must appear in the album title.
- */
+/** Reject tributes, karaoke, "inspired by", singles, etc. */
 const isJunk = (album: ItunesResult): boolean =>
   BAD_ALBUM_WORDS.some((bad) => (album.collectionName || "").toLowerCase().includes(bad));
-
-const scoreAlbum = (album: ItunesResult, movieTitle: string, requireZimmer: boolean): number => {
-  const albumTitle = (album.collectionName || "").toLowerCase();
-  const albumWords = new Set(significantWords(albumTitle));
-  const movieWords = significantWords(movieTitle);
-
-  if (movieWords.length === 0) return 0;
-  if (!movieWords.every((word) => albumWords.has(word))) return 0;
-  if (isJunk(album)) return 0;
-  // Fallback searches are broad — only accept albums actually credited to Zimmer,
-  // otherwise random same-titled releases slip through.
-  if (requireZimmer && !/zimmer/i.test(album.artistName || "")) return 0;
-
-  let score = 1;
-  if (/soundtrack|original motion picture|original score|music from/i.test(albumTitle)) score += 0.5;
-  if (/zimmer/i.test(album.artistName || "")) score += 0.3;
-  // Prefer tighter titles (less unrelated noise around the movie name)
-  score -= Math.max(0, albumWords.size - movieWords.length) * 0.01;
-
-  return score;
-};
 
 const normalizeAlbum = (album: ItunesResult): Album => ({
   id: album.collectionId as number,
@@ -95,20 +76,6 @@ const normalizeAlbum = (album: ItunesResult): Album => ({
 // Hans Zimmer album catalog, cached in memory (no local JSON file).
 const CATALOG_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 let catalogCache: { albums: ItunesResult[]; expiresAt: number } | null = null;
-
-/**
- * The non-junk, Zimmer-credited album with the most tracks — a "greatest hits"
- * style compilation, used as the always-Hans-Zimmer fallback.
- */
-const pickCompilation = (catalog: ItunesResult[]): ItunesResult | null => {
-  let best: ItunesResult | null = null;
-  for (const album of catalog) {
-    if (isJunk(album)) continue;
-    if (!/zimmer/i.test(album.artistName || "")) continue;
-    if (!best || (album.trackCount ?? 0) > (best.trackCount ?? 0)) best = album;
-  }
-  return best;
-};
 
 // Track lookups (request time) — cached in memory per instance.
 const trackCache = new Map<string, AlbumTracks>();
@@ -150,51 +117,25 @@ export const itunesQueries = {
   },
 
   /**
-   * Match a movie against a prefetched catalog (no network), tiered:
-   * 1. exact  — every significant title word appears in the album title
-   * 2. fuzzy  — at least half the title words appear
-   * 3. fallback — any proper Zimmer album (picked by movie id, so it varies)
-   * Every movie gets music; matchType tells the frontend how official it is.
+   * Match a movie against a prefetched catalog (no network). EXACT ONLY: the
+   * album's canonical title (minus soundtrack descriptors) must equal the movie's
+   * canonical title AND be credited to Hans Zimmer. No fuzzy matching and no
+   * compilation fallback — an unmatched movie returns null so the caller hides it.
    */
   matchFromCatalog: (movieTitle: string, _movieId: number, catalog: ItunesResult[]): Album | null => {
-    const withType = (result: ItunesResult, matchType: AlbumMatchType): Album => ({
-      ...normalizeAlbum(result),
-      matchType,
-    });
+    const target = canonicalTitle(movieTitle);
+    if (!target) return null;
 
-    // 1. exact
     let best: ItunesResult | null = null;
-    let bestScore = 0;
     for (const candidate of catalog) {
-      const score = scoreAlbum(candidate, movieTitle, false);
-      if (score > bestScore) {
-        best = candidate;
-        bestScore = score;
-      }
-    }
-    if (best) return withType(best, "exact");
-
-    // 2. fuzzy: at least half the significant title words in the album title
-    const movieWords = significantWords(movieTitle);
-    if (movieWords.length > 0) {
-      let fuzzyBest: ItunesResult | null = null;
-      let fuzzyScore = 0;
-      for (const candidate of catalog) {
-        if (isJunk(candidate)) continue;
-        const albumWords = new Set(significantWords((candidate.collectionName || "").toLowerCase()));
-        const coverage = movieWords.filter((word) => albumWords.has(word)).length / movieWords.length;
-        if (coverage >= 0.5 && coverage > fuzzyScore) {
-          fuzzyBest = candidate;
-          fuzzyScore = coverage;
-        }
-      }
-      if (fuzzyBest) return withType(fuzzyBest, "fuzzy");
+      if (isJunk(candidate)) continue;
+      if (!/zimmer/i.test(candidate.artistName || "")) continue;
+      if (canonicalTitle(candidate.collectionName || "") !== target) continue;
+      // Deluxe/expanded editions can also match — keep the fullest one.
+      if (!best || (candidate.trackCount ?? 0) > (best.trackCount ?? 0)) best = candidate;
     }
 
-    // No exact/fuzzy title match — fall back to a Hans Zimmer compilation (with
-    // lots of his songs) so the player always plays genuine Hans Zimmer music.
-    const compilation = pickCompilation(catalog);
-    return compilation ? withType(compilation, "fallback") : null;
+    return best ? { ...normalizeAlbum(best), matchType: "exact" } : null;
   },
 
   findAlbum: async (movieTitle: string): Promise<Album | null> => {
