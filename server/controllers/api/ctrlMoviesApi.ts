@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { movieQueries } from "../../services/movieService";
 import { itunesQueries } from "../../services/itunesService";
+import { getGradient } from "../../services/gradientService";
 import { tourQueries } from "../../services/setlistService";
 import { handleError } from "../../middleware/handleError";
 
@@ -103,12 +104,14 @@ export const getTracksForMovie = async (req: Request, res: Response): Promise<vo
     }
 
     const { album, tracks } = await itunesQueries.getAlbumTracks(movie.album.id);
+    const gradient = await getGradient((album ?? movie.album)?.artwork);
 
     cache(res, DAY);
     res.status(200).json({
       movieId: movie.id,
       movieTitle: movie.title,
       album: album ?? movie.album,
+      gradient,
       trackCount: tracks.length,
       tracks,
     });

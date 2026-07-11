@@ -2,6 +2,7 @@ import express from "express";
 import { getMovies, getMovieById, getTracksForMovie, getWarm } from "../controllers/api/ctrlMoviesApi";
 import { streamPreview, optionsPreview } from "../controllers/api/ctrlSoundtracksApi";
 import { getTours, getTourBySlug, getAlbumTracks } from "../controllers/api/ctrlToursApi";
+import { setCurrent, getCurrentGradient } from "../controllers/api/ctrlCurrentApi";
 import { idValidation } from "../middleware/idValidation";
 
 const router = express.Router();
@@ -19,6 +20,8 @@ router.get("/health", (req: express.Request, res: express.Response) => {
 
 router.get("/movie", getMovies);
 router.get("/warm", getWarm);
+router.post("/current", setCurrent);
+router.get("/current/gradient", getCurrentGradient);
 
 router.get("/movie/:id/tracks", getTracksForMovie);
 
