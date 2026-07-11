@@ -139,10 +139,22 @@ export const itunesQueries = {
   },
 
   findAlbum: async (movieTitle: string): Promise<Album | null> => {
-    // Match against Hans Zimmer's iTunes catalog (title/composer semi-match);
-    // matchFromCatalog falls back to a compilation, so it is always his music.
+    // Exact-match a movie title against Hans Zimmer's iTunes catalog.
     const catalog = await itunesQueries.getCatalog("Hans Zimmer");
     return itunesQueries.matchFromCatalog(movieTitle, 0, catalog);
+  },
+
+  /** A Hans Zimmer "Live" album (the fullest one), used for tour players. */
+  findLiveAlbum: async (): Promise<Album | null> => {
+    const catalog = await itunesQueries.getCatalog("Hans Zimmer");
+    let best: ItunesResult | null = null;
+    for (const album of catalog) {
+      if (isJunk(album)) continue;
+      if (!/zimmer/i.test(album.artistName || "")) continue;
+      if (!/\blive\b/i.test(album.collectionName || "")) continue;
+      if (!best || (album.trackCount ?? 0) > (best.trackCount ?? 0)) best = album;
+    }
+    return best ? { ...normalizeAlbum(best), matchType: "exact" } : null;
   },
 
   /**

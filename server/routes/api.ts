@@ -1,6 +1,7 @@
 import express from "express";
 import { getMovies, getMovieById, getTracksForMovie } from "../controllers/api/ctrlMoviesApi";
 import { streamPreview, optionsPreview } from "../controllers/api/ctrlSoundtracksApi";
+import { getTours, getTourBySlug, getAlbumTracks } from "../controllers/api/ctrlToursApi";
 import { idValidation } from "../middleware/idValidation";
 
 const router = express.Router();
@@ -94,6 +95,11 @@ router.get("/movie/:id/tracks", getTracksForMovie);
  *         description: Movie not found
  */
 router.get("/movie/:id", getMovieById);
+
+// --- Tours (Hans Zimmer live tours from setlist.fm) ---
+router.get("/tours", getTours);
+router.get("/tour/:slug", getTourBySlug);
+router.get("/album/:id/tracks", getAlbumTracks);
 
 /**
  * @openapi
